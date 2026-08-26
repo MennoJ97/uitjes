@@ -1,0 +1,70 @@
+[
+  {
+    "title": "IJ-Hallen vlooienmarkt",
+    "venue": "IJ-Hallen, NDSM-werf",
+    "city": "Amsterdam",
+    "categories": ["market"],
+    "url": "https://www.ijhallen.nl/",
+    "time": "09:00",
+    "price": "€ 6",
+    "summary": "Europe's largest flea market, ~750 stalls on the NDSM wharf. PROVISIONAL recurrence — confirm the exact weekend on ijhallen.nl.",
+    "provisional": true,
+    "repeat": { "rule": "monthly-nth-weekday", "weekday": 5, "nth": 1, "until": "2027-06-30" }
+  },
+  {
+    "title": "IJ-Hallen vlooienmarkt (zondag)",
+    "venue": "IJ-Hallen, NDSM-werf",
+    "city": "Amsterdam",
+    "categories": ["market"],
+    "url": "https://www.ijhallen.nl/",
+    "time": "09:00",
+    "price": "€ 6",
+    "summary": "Sunday half of the monthly IJ-Hallen weekend. PROVISIONAL — confirm on ijhallen.nl.",
+    "provisional": true,
+    "repeat": { "rule": "monthly-nth-weekday", "weekday": 6, "nth": 1, "until": "2027-06-30" }
+  },
+  {
+    "title": "Antiek- en boekenmarkt Nieuwmarkt",
+    "venue": "Nieuwmarkt",
+    "city": "Amsterdam",
+    "categories": ["market"],
+    "url": "https://www.amsterdam.nl/",
+    "time": "09:00",
+    "summary": "Sunday antiques and second-hand books on the Nieuwmarkt, summer season. PROVISIONAL — season dates vary per year.",
+    "provisional": true,
+    "repeat": { "rule": "weekly", "weekday": 6, "until": "2026-09-27" }
+  },
+  {
+    "title": "Vlooienmarkt Breedstraat",
+    "venue": "Breedstraat",
+    "city": "Utrecht",
+    "categories": ["market"],
+    "url": "https://www.utrecht.nl/wonen-en-leven/markten/",
+    "time": "08:00",
+    "summary": "Saturday morning flea market in the Utrecht city centre. PROVISIONAL — confirm on utrecht.nl.",
+    "provisional": true,
+    "repeat": { "rule": "weekly", "weekday": 5, "until": "2027-06-30" }
+  },
+  {
+    "title": "Lapjesmarkt",
+    "venue": "Breedstraat",
+    "city": "Utrecht",
+    "categories": ["market"],
+    "url": "https://www.utrecht.nl/wonen-en-leven/markten/",
+    "time": "08:00",
+    "summary": "Long-running fabric market, Saturday mornings. PROVISIONAL — confirm on utrecht.nl.",
+    "provisional": true,
+    "repeat": { "rule": "weekly", "weekday": 5, "until": "2027-06-30" }
+  },
+  {
+    "title": "Vintage Kilo Sale",
+    "venue": "wisselende locaties",
+    "city": "Amsterdam",
+    "categories": ["market"],
+    "url": "https://www.vintagekilosale.nl/",
+    "time": "10:00",
+    "summary": "Pop-up vintage-by-the-kilo sale. PLACEHOLDER dates — replace with the real ones from vintagekilosale.nl.",
+    "provisional": true,
+    "dates": ["2026-09-19", "2026-10-17", "2026-11-21"]
+  }
+]

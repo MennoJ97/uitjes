@@ -1,0 +1,10 @@
+# supercronic crontab — times are in TZ (Europe/Amsterdam, set in compose).
+# supercronic runs each command via /bin/sh -c and logs its stdout/stderr.
+#
+# m h dom mon dow  command
+
+# Rebuild the whole agenda three times a day. Venue programmes change on the
+# order of days, not minutes, so this is already generous; the point of three
+# is that a single failed run never leaves the site stale for a full day.
+# --refresh bypasses the on-disk HTTP cache so a run always sees live data.
+20 6,13,20 * * *  cd /work && python build.py --refresh --out /site/data/events.json

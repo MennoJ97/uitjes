@@ -1,0 +1,459 @@
+# UITradar source registry.
+#
+# Everything about where events come from lives in this file. Adding, removing,
+# reweighting or re-pointing a source is an edit here — no Python involved,
+# as long as an existing adapter fits the shape of the site.
+#
+#   python3 build.py --list          see the registry
+#   python3 build.py --probe <id>    see exactly what one source returns
+#
+# Adapters: tribe | jsonld | json_api | ticketmaster | ics | rss |
+#           regex_cards | manual
+
+[http]
+cache_ttl_seconds = 3600   # re-fetch at most hourly while you iterate
+timeout_seconds = 25
+delay_seconds = 0.4        # polite gap between live requests
+
+[filter]
+horizon_days = 120
+# Drop anything we can't place in one of the cities below. Set false to keep
+# everything the sources hand us (useful while debugging a new source).
+require_known_city = true
+drop_title_contains = ["cadeaubon", "gift card", "parkeer", "combiticket"]
+# Aggregator boilerplate that would otherwise show up as an event description.
+drop_summary_contains = [
+  "automatisch samengesteld",
+  "controleer datum, tijd en details",
+]
+
+# Canonical city -> the strings (in venue or city fields) that fold onto it.
+# This is how "and around" is defined: widen these lists to widen the net.
+[filter.cities]
+Amsterdam = [
+  "amsterdam", "ijburg", "amstelveen", "duivendrecht", "diemen",
+  "zaandam", "haarlem", "ziggo dome", "afas live", "johan cruijff",
+  "paradiso", "melkweg", "concertgebouw", "carré", "carre", "muziekgebouw",
+  "de la mar", "internationaal theater", "bimhuis", "royal theater tuschinski",
+]
+Utrecht = [
+  "utrecht", "leidsche rijn", "nieuwegein", "zeist", "de bilt", "houten",
+  "maarssen", "bunnik", "vleuten", "amersfoort",
+  "tivolivredenburg", "tivoli", "stadsschouwburg utrecht", "ekko",
+  "de helling", "db's", "theater kikker", "domtoren", "pieterskerk",
+]
+
+[output]
+# When two sources describe the same event, the one listed first wins and the
+# others only donate fields it is missing. Reorder to change who is canonical.
+# Venue-direct sources first: they are the primary record for their own
+# programme. The city-wide agendas are broader but second-hand — uitamsterdam
+# in particular auto-generates its entries from public sources and says so.
+source_priority = [
+  "concertgebouw",
+  "tivolivredenburg",
+  "carre",
+  "stadsschouwburg_utrecht",
+  "melkweg",
+  "ziggodome",
+  "afaslive",
+  "johancruijffarena",
+  "ticketmaster_nl",
+  "uitamsterdam",
+  "uitagenda_utrecht",
+  "markets_manual",
+  "theaterkrant",
+]
+
+# Applied to every source unless it overrides them.
+[defaults]
+horizon_days = 120
+
+
+# ---------------------------------------------------------------------------
+# VERIFIED WORKING — open REST API, no key, ~240 events for Amsterdam
+# ---------------------------------------------------------------------------
+[[source]]
+id = "uitamsterdam"
+label = "Uit Amsterdam"
+adapter = "tribe"
+enabled = true
+base_url = "https://www.uitamsterdam.com"
+per_page = 50
+max_pages = 25
+default_city = "Amsterdam"
+
+[source.category_map]
+muziek = "concert"
+klassiek = "classical"
+"klassieke muziek" = "classical"
+theater = "theatre"
+dans = "dance"
+cabaret = "comedy"
+film = "film"
+festival = "festival"
+markt = "market"
+markten = "market"
+"kunst & expositie" = "exhibition"
+expositie = "exhibition"
+musea = "exhibition"
+kids = "family"
+kinderen = "family"
+uitgaan = "club"
+nachtleven = "club"
+lezing = "talk"
+sport = "sports"
+
+
+# ---------------------------------------------------------------------------
+# TICKETMASTER — disabled, and no longer needed for the reason it was added.
+# It was the only route to Ziggo Dome and AFAS Live; both are now read straight
+# from the venues (see below), which is a better record anyway. What it would
+# still add is Johan Cruijff ArenA and AFAS Theater, plus a long tail of smaller
+# rooms. Needs a free key from developer.ticketmaster.com:
+#   pass it to the updater container as TICKETMASTER_API_KEY.
+# Set enabled = true once a key exists; without one it just fails every build.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "ticketmaster_nl"
+label = "Ticketmaster (NL)"
+adapter = "ticketmaster"
+enabled = false
+country_code = "NL"
+city = ["Amsterdam", "Utrecht"]
+size = 200
+max_pages = 5
+
+[source.category_map]
+music = "concert"
+classical = "classical"
+opera = "classical"
+"arts & theatre" = "theatre"
+theatre = "theatre"
+musical = "theatre"
+dance = "dance"
+comedy = "comedy"
+"dance/electronic" = "club"
+film = "film"
+sports = "sports"
+family = "family"
+miscellaneous = "other"
+
+
+# ---------------------------------------------------------------------------
+# VENUE-DIRECT — server-rendered HTML, no feed. Date lives in the detail slug.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "melkweg"
+label = "Melkweg"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.melkweg.nl/nl/agenda/"
+base_url = "https://www.melkweg.nl"
+default_venue = "Melkweg"
+default_city = "Amsterdam"
+item_pattern = '''href="(?P<url>/nl/agenda/[^"]*?(?P<date>\d{2}-\d{2}-\d{4})/)"[^>]*>.*?<span>(?P<category>[^<]{0,30})</span>.*?<h3[^>]*>(?P<title>[^<]+)</h3>'''
+
+[source.category_map]
+club = "club"
+concert = "concert"
+festival = "festival"
+expo = "exhibition"
+film = "film"
+theater = "theatre"
+
+
+# ---------------------------------------------------------------------------
+# TIVOLIVREDENBURG — the HTML pages sit behind a Cloudflare bot challenge, but
+# the WordPress agenda feed does not, and its <content:encoded> carries the
+# entire production record as JSON: hall, genre, prices, images, exact timings.
+# 10 items per page; ?paged=N walks forward in time.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "tivolivredenburg"
+label = "TivoliVredenburg"
+adapter = "rss_json"
+enabled = true
+url = "https://www.tivolivredenburg.nl/agenda/feed/?paged={page}"
+pages = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50]
+root_path = "production"
+prefer_timing = "Start"
+price_min = "ticketTypes"
+default_city = "Utrecht"
+fallback_categories = ["concert"]
+
+[source.fields]
+title = "publicTitleWebsite"
+summary = "subTitle"
+start = "startDatetime"
+end = "endDatetime"
+venue = "programLocations"
+category = "publicGenre"
+image = "defaultDigitalAsset.urls.landscape_large"
+
+[source.category_map]
+"pop / rock" = "concert"
+pop = "concert"
+rock = "concert"
+klassiek = "classical"
+"klassieke muziek" = "classical"
+jazz = "concert"
+"jazz / soul" = "concert"
+wereldmuziek = "concert"
+dance = "club"
+"dance / elektronisch" = "club"
+elektronisch = "club"
+heavy = "concert"
+hiphop = "concert"
+film = "film"
+"spoken word" = "talk"
+lezing = "talk"
+festival = "festival"
+kids = "family"
+familie = "family"
+
+
+# ---------------------------------------------------------------------------
+# HET CONCERTGEBOUW — Nuxt, but fully server-rendered, with a proper
+# <time datetime="...Z"> on every card. ?page=N, 15 concerts per page.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "concertgebouw"
+label = "Het Concertgebouw"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.concertgebouw.nl/concerten-en-tickets?page={page}"
+pages = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25]
+base_url = "https://www.concertgebouw.nl"
+default_venue = "Het Concertgebouw"
+default_city = "Amsterdam"
+# A concert hall: anything the keyword pass cannot place is still a concert.
+fallback_categories = ["concert"]
+item_pattern = 'href="(?P<url>/concerten/[^"]+)".*?<h3 class="c-content__title[^"]*"[^>]*>\s*(?P<title>[^<]+?)\s*</h3>.*?<time datetime="(?P<date>[^"]+)"'
+
+
+# ---------------------------------------------------------------------------
+# STADSSCHOUWBURG UTRECHT — server-rendered; dates are D-M-YYYY H:M:S inside a
+# <time datetime>. ?page=N, 34 shows per page.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "stadsschouwburg_utrecht"
+label = "Stadsschouwburg Utrecht"
+adapter = "regex_cards"
+enabled = true
+url = "https://stadsschouwburg-utrecht.nl/agenda?page={page}"
+pages = [1,2,3,4,5,6,7,8,9,10]
+base_url = "https://stadsschouwburg-utrecht.nl"
+default_city = "Utrecht"
+fallback_categories = ["theatre"]
+item_pattern = '<a class="covering-link remove-underline" href="(?P<url>/agenda/[^"]+)"[^>]*>\s*(?P<title>[^<]+?)\s*</a>.*?<time datetime="(?P<date>[^"]+)".*?<span class="tag ?">\s*(?P<category>[^<]+?)\s*</span>\s*<p class="location[^"]*">(?P<venue>[^<]*)</p>'
+
+[source.category_map]
+toneel = "theatre"
+theater = "theatre"
+musical = "theatre"
+muziektheater = "theatre"
+jeugdtheater = "family"
+familie = "family"
+dans = "dance"
+cabaret = "comedy"
+muziek = "concert"
+klassiek = "classical"
+opera = "classical"
+film = "film"
+festival = "festival"
+lezing = "talk"
+talkshow = "talk"
+expositie = "exhibition"
+
+
+# ---------------------------------------------------------------------------
+# KONINKLIJK THEATER CARRÉ — Vue SPA over a Salesforce/Ticketmatic backend.
+# One request returns every production with its individual performances, so
+# there is nothing to paginate; adapters/carre.py does the join.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "carre"
+label = "Koninklijk Theater Carré"
+adapter = "carre"
+enabled = true
+url = "https://carre.nl/api/render/production-page-list-nl"
+base_url = "https://carre.nl"
+default_venue = "Koninklijk Theater Carré"
+default_city = "Amsterdam"
+fallback_categories = ["theatre"]
+
+
+# ---------------------------------------------------------------------------
+# ZIGGO DOME — the agenda page calls its own JSON API directly. `limit` is
+# capped at 50 server-side, so it is paged by offset. See adapters/ziggodome.py
+# for why this one needs code: JSON-encoded genres, id-derived URLs, and a
+# title split across two fields.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "ziggodome"
+label = "Ziggo Dome"
+adapter = "ziggodome"
+enabled = true
+url = "https://www.ziggodome.nl/api/agenda/aankomend"
+base_url = "https://ziggodome.nl"
+page_size = 50
+max_pages = 20
+default_venue = "Ziggo Dome"
+default_city = "Amsterdam"
+fallback_categories = ["concert"]
+# Their image URLs are Azure SAS links with a token that expired in June 2026
+# (403), and the bare blob 404s. See adapters/ziggodome.py.
+include_images = false
+
+[source.category_map]
+pop = "concert"
+rock = "concert"
+indie = "concert"
+hiphop = "concert"
+soul = "concert"
+heavy = "concert"
+nederlands = "concert"
+"k-pop" = "concert"
+klassiek = "classical"
+dance = "club"
+comedy = "comedy"
+familie = "family"
+sport = "sports"
+show = "theatre"
+
+
+# ---------------------------------------------------------------------------
+# AFAS LIVE — Craft CMS, fully server-rendered; the whole programme is on one
+# page and the month tabs only filter client-side, so there is nothing to page.
+# Cancelled shows carry no date span and are skipped. The optional <time> in
+# the heading is how multi-session days (darts, boxing) give their start time.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "afaslive"
+label = "AFAS Live"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.afaslive.nl/agenda"
+base_url = "https://www.afaslive.nl"
+default_venue = "AFAS Live"
+default_city = "Amsterdam"
+fallback_categories = ["concert"]
+item_pattern = '<a href="(?P<url>https://www\.afaslive\.nl/agenda/[^"]+)" class="rowImg"(?:(?!<article)[\s\S])*?<img src="(?P<image>[^"]+)"(?:(?!<article)[\s\S])*?<h4>(?P<title>[^<]+?)\s*(?:<time>(?P<time>[^<]+)</time>)?\s*</h4>(?:(?!<article)[\s\S])*?<span class="d">(?P<date>[^<]+)</span>'
+flags = "i"
+
+
+# ---------------------------------------------------------------------------
+# JOHAN CRUIJFF ARENA — Craft CMS, server-rendered, whole upcoming programme on
+# one page grouped by month; there is no pagination because the ArenA only runs
+# ~20 events ahead (mostly Ajax home matches plus a few stadium concerts).
+# Cards carry a proper <time datetime> with timezone. Kickoff times that are
+# not yet announced are published as midnight — see midnight_means_all_day.
+# Mostly football: turn this source off, or filter out the Sports category on
+# the site, if the fixtures are noise for you.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "johancruijffarena"
+label = "Johan Cruijff ArenA"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.johancruijffarena.nl/kalender/"
+base_url = "https://www.johancruijffarena.nl"
+default_venue = "Johan Cruijff ArenA"
+default_city = "Amsterdam"
+midnight_means_all_day = true
+item_pattern = '<a href="(?P<url>https://www\.johancruijffarena\.nl/kalender/\d+[^"]*)" class="card (?:(?!</a>)[\s\S])*?<img class="card__image__img" src="(?P<image>[^"]+)"(?:(?!</a>)[\s\S])*?<time datetime="(?P<date>[^"]+)"(?:(?!</a>)[\s\S])*?<h3>(?P<title>[^<]+)</h3>(?:(?!</a>)[\s\S])*?<div class="card__meta">\s*<span>(?P<category>[^<]+)</span>'
+flags = "i"
+
+[source.category_map]
+eredivisie = "sports"
+oranje = "sports"
+"knvb beker" = "sports"
+"champions league" = "sports"
+"europa league" = "sports"
+voetbal = "sports"
+concert = "concert"
+dance = "club"
+festival = "festival"
+evenement = "other"
+
+
+# ---------------------------------------------------------------------------
+# HAND-CURATED — vintage markets and flea markets have no usable feed anywhere.
+# Edit data/manual/markets.json; monthly recurrence is expressed once.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "markets_manual"
+label = "Markets (curated)"
+adapter = "manual"
+enabled = true
+file = "data/manual/markets.json"
+
+
+# ---------------------------------------------------------------------------
+# EXPERIMENTAL — enable once the pattern is tuned with `--probe`.
+# UITagenda Utrecht is rich (theatre, classical, festivals, tours) but is plain
+# WordPress with no event post type exposed, so it has to be scraped.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "uitagenda_utrecht"
+label = "UITagenda Utrecht"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.uitagendautrecht.nl/agenda/?page={page}"
+pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+base_url = "https://www.uitagendautrecht.nl"
+default_city = "Utrecht"
+item_pattern = '''href="(?P<url>https://www\.uitagendautrecht\.nl/evenement/[^"]+)".*?<img src="(?P<image>[^"]+)".*?<th>Datum</th>\s*<th>(?P<date>[^<]+)</th>(?:\s*</tr>\s*<tr>\s*<td>Tijd</td>\s*<td>\s*(?P<time>\d{1,2}:\d{2}))?.*?<div class="post-title">(?P<title>[^<]+)</div>.*?<span>(?P<venue>[^<]+)</span>.*?<span class="genre-label"><i[^>]*></i>\s*(?P<category>[^<]+)</span>'''
+
+[source.category_map]
+festivals = "festival"
+muziek = "concert"
+"pop & rock" = "concert"
+"klassiek & opera" = "classical"
+klassiek = "classical"
+jazz = "concert"
+theater = "theatre"
+"theater & musical" = "theatre"
+musical = "theatre"
+dans = "dance"
+cabaret = "comedy"
+film = "film"
+"musea & exposities" = "exhibition"
+exposities = "exhibition"
+musea = "exhibition"
+kinderen = "family"
+"kids & familie" = "family"
+literatuur = "talk"
+lezingen = "talk"
+rondleidingen = "talk"
+"uitgaan & nachtleven" = "club"
+markten = "market"
+"tips van de redactie" = "other"
+divers = "other"
+
+[[source]]
+id = "theaterkrant"
+label = "Theaterkrant"
+adapter = "rss"
+enabled = false
+url = "https://www.theaterkrant.nl/feed/"
+date_field = "auto"
+
+# Template for a venue with an undocumented JSON endpoint — copy, point, probe.
+[[source]]
+id = "example_json_api"
+label = "Example JSON API"
+adapter = "json_api"
+enabled = false
+url = "https://example.nl/api/agenda?page={page}"
+pages = [1, 2]
+list_path = "data"
+default_city = "Utrecht"
+
+[source.fields]
+title = "attributes.title"
+start = "attributes.start"
+url = "attributes.url"
+venue = "attributes.location.name"
+image = "attributes.image.url"

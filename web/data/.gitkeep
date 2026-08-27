@@ -1,0 +1,11 @@
+Keeps this directory in git, and it has to stay.
+
+The updater's output directory is bind-mounted over this path at runtime, and the
+site root above it is mounted read-only. Docker cannot create a mountpoint inside
+a read-only mount, so if this directory is missing the uitjes container fails to
+start outright:
+
+  error mounting ... to rootfs at "/usr/share/nginx/html/data":
+  create mountpoint ...: read-only file system
+
+Nothing here is ever served -- the data mount shadows the whole directory.

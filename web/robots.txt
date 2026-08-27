@@ -1,0 +1,5 @@
+# Deliberately not indexed. This site aggregates other organisations'
+# programmes; it is meant to be a link you share, not a search result.
+# Paired with <meta name="robots" content="noindex, nofollow"> on the page.
+User-agent: *
+Disallow: /

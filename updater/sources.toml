@@ -8,12 +8,43 @@
 #   python3 build.py --probe <id>    see exactly what one source returns
 #
 # Adapters: tribe | jsonld | json_api | ticketmaster | ics | rss |
-#           regex_cards | manual
+#           regex_cards | manual | carre | ziggodome | boomchicago | paradiso |
+#           rss_json
 
 [http]
 cache_ttl_seconds = 3600   # re-fetch at most hourly while you iterate
 timeout_seconds = 25
 delay_seconds = 0.4        # polite gap between live requests
+# One timed-out fetch used to cost a whole source: the build degrades rather
+# than fails, so a transient Melkweg timeout published a site missing 227
+# events. Retries cover that. They apply only to timeouts, dropped connections
+# and 5xx/429 — a 404 is an answer, not a hiccup.
+retries = 2
+retry_backoff_seconds = 1.0
+# The brake on retrying. After this many consecutive failures against one host,
+# every further request to it fails immediately for the rest of the run, so a
+# host that is genuinely down costs seconds rather than an hour of a 200-request
+# source waiting out its timeout. Any success resets the count.
+host_failure_limit = 4
+
+# Sanity check between building the dataset and replacing the published one.
+# A source that breaks does not fail the build - one bad source is meant to
+# degrade the agenda, not kill it - so without this a single timeout silently
+# publishes a thinner site. Tripping it costs nothing: the previous
+# events.json keeps serving and the next run tries again a few hours later.
+# `build.py --force` publishes anyway, which is what to use after deliberately
+# removing a source.
+[publish]
+# Sources smaller than this are not worth blocking a publish over: the ArenA
+# announcing five home games instead of twelve is a quiet month, not a bug.
+min_events_to_guard = 20
+# Refuse if a source that cleared that floor last build now has less than half
+# of what it had. Catches both a source that errored and one that silently
+# stopped matching after a site redesign.
+source_drop_fraction = 0.5
+# Backstop for many sources degrading a little at once rather than one failing
+# outright: refuse if the whole agenda shrinks by more than a fifth.
+total_drop_fraction = 0.2
 
 [filter]
 horizon_days = 120
@@ -21,6 +52,14 @@ horizon_days = 120
 # everything the sources hand us (useful while debugging a new source).
 require_known_city = true
 drop_title_contains = ["cadeaubon", "gift card", "parkeer", "combiticket"]
+# Second dedupe pass. The primary key is title+day+city, which misses one event
+# wearing two labels — "Douwe Bob" from the venue and "Douwe Bob in Paradiso"
+# from an aggregator. This merges a title that contains another title, within
+# the same day and city. What stops it eating genuine satellite events (an
+# afterparty, a Vriendenrepetitie) is the `aggregator` flag on the sources
+# below, not a list of words — see _may_merge in pipeline.py. Every merge is
+# printed by the build and recorded under "merges" in events.json.
+fuzzy_titles = true
 # Aggregator boilerplate that would otherwise show up as an event description.
 drop_summary_contains = [
   "automatisch samengesteld",
@@ -35,6 +74,9 @@ Amsterdam = [
   "zaandam", "haarlem", "ziggo dome", "afas live", "johan cruijff",
   "paradiso", "melkweg", "concertgebouw", "carré", "carre", "muziekgebouw",
   "de la mar", "internationaal theater", "bimhuis", "royal theater tuschinski",
+  "kleine komedie", "boom chicago",
+  # Rooms Paradiso programmes but does not own — see the paradiso source.
+  "tolhuistuin", "bitterzoet", "zonnehuis", "cinetol", "skatecafe",
 ]
 Utrecht = [
   "utrecht", "leidsche rijn", "nieuwegein", "zeist", "de bilt", "houten",
@@ -53,6 +95,9 @@ source_priority = [
   "concertgebouw",
   "tivolivredenburg",
   "carre",
+  "paradiso",
+  "kleine_komedie",
+  "boomchicago",
   "stadsschouwburg_utrecht",
   "melkweg",
   "ziggodome",
@@ -79,6 +124,10 @@ label = "Uit Amsterdam"
 adapter = "tribe"
 enabled = true
 base_url = "https://www.uitamsterdam.com"
+# Second-hand: it republishes other organisations' programmes, and its own
+# titles are auto-generated, so it can list one event twice under two names.
+# That is what lets the fuzzy pass dedupe this source against itself.
+aggregator = true
 per_page = 50
 max_pages = 25
 default_city = "Amsterdam"
@@ -120,6 +169,10 @@ label = "Ticketmaster (NL)"
 adapter = "ticketmaster"
 enabled = false
 country_code = "NL"
+# Second-hand: it republishes other organisations' programmes, and its own
+# titles are auto-generated, so it can list one event twice under two names.
+# That is what lets the fuzzy pass dedupe this source against itself.
+aggregator = true
 city = ["Amsterdam", "Utrecht"]
 size = 200
 max_pages = 5
@@ -379,6 +432,167 @@ evenement = "other"
 
 
 # ---------------------------------------------------------------------------
+# DE KLEINE KOMEDIE — Peppered CMS, server-rendered. The date printed on a card
+# is Dutch text with no year ("di 22 sep"), and for a run it is a span, so the
+# date comes from the wishlist button instead: every card carries an exact
+# data-event-start="YYYY-MM-DD HH:MM:SS" for its first performance. Cancelled
+# shows have no wishlist button, so they drop out here without a filter.
+# One entry per PRODUCTION, not per performance — a show playing twelve nights
+# appears once, on its opening night, which is how the venue's own agenda reads.
+# ?page=N, 8 productions a page, 19 pages out to a year ahead; page 9 is already
+# past the 120-day horizon, so ten is generous.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "kleine_komedie"
+label = "De Kleine Komedie"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.dekleinekomedie.nl/agenda?page={page}"
+pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+base_url = "https://www.dekleinekomedie.nl"
+default_venue = "De Kleine Komedie"
+default_city = "Amsterdam"
+# A cabaret stage: anything the keyword pass cannot place is still cabaret.
+fallback_categories = ["comedy"]
+item_pattern = '''<li\s+data-entry-id="\d+"(?:(?!data-entry-id)[\s\S])*?<img src="(?P<image>[^"]+)"(?:(?!data-entry-id)[\s\S])*?<a class="desc" href="(?P<url>/agenda/[^"]+)"(?:(?!data-entry-id)[\s\S])*?<h3 class="title">(?P<title>[^<]+)</h3>\s*(?:<div class="subtitle">(?P<summary>[^<]*)</div>)?(?:(?!data-entry-id)[\s\S])*?(?:<a class="genres__link"[^>]*>\s*(?P<category>[^<]+?)\s*</a>(?:(?!data-entry-id)[\s\S])*?)?data-event-start="(?P<date>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"'''
+
+# The tags on a card are mood words as often as genres — PERSOONLIJK, ABSURD,
+# MET LIEDJES. Only the ones that really name a form are mapped; the rest are
+# left to fall through to keyword inference and then to the fallback above.
+[source.category_map]
+cabaret = "comedy"
+kleinkunst = "comedy"
+komedie = "comedy"
+satire = "comedy"
+zelfspot = "comedy"
+improvisatie = "comedy"
+toneel = "theatre"
+musical = "theatre"
+theater = "theatre"
+theatercollege = "talk"
+literair = "talk"
+"poëzie" = "talk"
+lezing = "talk"
+theaterconcert = "concert"
+muzikaal = "concert"
+muziek = "concert"
+klassiek = "classical"
+opera = "classical"
+dans = "dance"
+familie = "family"
+jeugd = "family"
+film = "film"
+
+
+# ---------------------------------------------------------------------------
+# BOOM CHICAGO — WordPress with no event post type. /shows/ is prose plus a
+# FareHarbor booking widget, and wp-json exposes nothing dated, so the dates
+# come from FareHarbor's own read API. See adapters/boomchicago.py for why that
+# needs code and why it costs a request per show per month.
+#
+# horizon_days is deliberately shorter than the site's 120: the programme is a
+# handful of resident shows playing most nights, so the far end of the horizon
+# buys ~70 more requests for more rows of the same six titles. Raise it if the
+# visiting comedians announced months out are worth the traffic.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "boomchicago"
+label = "Boom Chicago"
+adapter = "boomchicago"
+enabled = true
+url = "https://fareharbor.com/api/v1/companies/boomchicago/items/"
+base_url = "https://fareharbor.com/embeds/book"
+default_venue = "Boom Chicago"
+default_city = "Amsterdam"
+horizon_days = 60
+# Everything the box office sells that is not a show. is_retail already drops
+# the gift cards, memberships and donations; these two are the class programme,
+# which is a course you enrol in, not an evening out.
+skip_name_prefixes = ["[Academy]", "[Summer Intensive]"]
+# 502846, "The Famous Boom Chicago Comedy Show", is an umbrella product: it is
+# sold for whatever is on the mainstage that night, so every one of its dates
+# is an exact-time duplicate of a named show (checked: 79 dates, 79 collisions,
+# 0 nights where it stood alone). Dedupe cannot catch it — the title differs,
+# so it reads as a second show at the same hour. By pk rather than by name
+# because the name is the part they change.
+skip_item_pks = [502846]
+# An improv and stand-up theatre: the odd quiz or wrestling night included.
+fallback_categories = ["comedy"]
+
+# FareHarbor publishes no genre, so the category is inferred from the title.
+# These are whole-title overrides for the ones inference gets wrong: both of
+# these are improv shows that trip the "live" keyword and come out as concerts.
+[source.category_map]
+"sunday night live" = "comedy"
+"pro wrestling holland live x boom chicago" = "comedy"
+
+
+# ---------------------------------------------------------------------------
+# PARADISO — and the twenty other rooms Paradiso programmes. Next.js with no
+# feed and no JSON-LD; the programme comes from a GraphQL endpoint whose bearer
+# token ships in their public JS bundle. See adapters/paradiso.py for the two
+# argument quirks that make it work, and for what to do when the token rotates.
+#
+# The whole 120-day horizon is five requests, which makes this the cheapest
+# source in the build by an order of magnitude.
+#
+# Each event names its own venue and keeps it: this feed is Paradiso (241),
+# Tolhuistuin (95), Bitterzoet (45), Zonnehuis, Parallel, Cinetol, Skatecafe
+# and a long tail. The label below says who publishes the programme, not where
+# to turn up — `venue` on the event says that.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "paradiso"
+label = "Paradiso"
+adapter = "paradiso"
+enabled = true
+url = "https://knwxh8dmh1.execute-api.eu-central-1.amazonaws.com/graphql"
+base_url = "https://www.paradiso.nl/nl/"
+# Not a credential of ours: this is the read token their own front end hands to
+# every visitor, lifted from /_next/static/chunks (grep for `execute-api`). It
+# is here rather than in .env so the source works from a fresh clone. When it
+# rotates the build report shows this source failing; re-grep the bundle, or
+# set PARADISO_API_TOKEN in the environment to override without a config edit.
+token = "qNG1MfNixLtJU_iE_nvJ3ssmMY5NZ3Nx"
+token_env = "PARADISO_API_TOKEN"
+page_size = 100
+max_pages = 20
+default_city = "Amsterdam"
+# Every room in this feed is in Amsterdam, so an event whose location is
+# missing still belongs to the city; venue falls back to the publisher.
+default_venue = "Paradiso"
+# A music venue first: an unlabelled night here is a concert.
+fallback_categories = ["concert"]
+
+# Their tags are two layers deep — a broad one ("Concert", "Club") plus a
+# free-text sub-genre ("Hiphop - UK Rap", "Club - Ambient/Experimental").
+# Only the broad layer is mapped; the sub-genres always ride along with one of
+# these, and chasing 57 of them would be a full-time job.
+[source.category_map]
+concert = "concert"
+pop = "concert"
+rock = "concert"
+"alternative / indie" = "concert"
+"alternative / indie / rock" = "concert"
+"singer-songwriter" = "concert"
+"soul / jazz / funk" = "concert"
+"hiphop / r&b" = "concert"
+"americana / blues / country / folk" = "concert"
+"country / americana / folk / blues" = "concert"
+"afro / reggae / dancehall / latin" = "concert"
+"punk / noise" = "concert"
+roots = "concert"
+club = "club"
+elektronisch = "club"
+"amsterdam dance event" = "club"
+"september club nights" = "club"
+dans = "dance"
+"summer dance forever" = "dance"
+"literair / wetenschap / politiek / kunst" = "talk"
+"poëzie / spoken word" = "talk"
+
+
+# ---------------------------------------------------------------------------
 # HAND-CURATED — vintage markets and flea markets have no usable feed anywhere.
 # Edit data/manual/markets.json; monthly recurrence is expressed once.
 # ---------------------------------------------------------------------------
@@ -403,6 +617,10 @@ enabled = true
 url = "https://www.uitagendautrecht.nl/agenda/?page={page}"
 pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 base_url = "https://www.uitagendautrecht.nl"
+# Second-hand: it republishes other organisations' programmes, and its own
+# titles are auto-generated, so it can list one event twice under two names.
+# That is what lets the fuzzy pass dedupe this source against itself.
+aggregator = true
 default_city = "Utrecht"
 item_pattern = '''href="(?P<url>https://www\.uitagendautrecht\.nl/evenement/[^"]+)".*?<img src="(?P<image>[^"]+)".*?<th>Datum</th>\s*<th>(?P<date>[^<]+)</th>(?:\s*</tr>\s*<tr>\s*<td>Tijd</td>\s*<td>\s*(?P<time>\d{1,2}:\d{2}))?.*?<div class="post-title">(?P<title>[^<]+)</div>.*?<span>(?P<venue>[^<]+)</span>.*?<span class="genre-label"><i[^>]*></i>\s*(?P<category>[^<]+)</span>'''
 
@@ -438,6 +656,10 @@ label = "Theaterkrant"
 adapter = "rss"
 enabled = false
 url = "https://www.theaterkrant.nl/feed/"
+# Second-hand: it republishes other organisations' programmes, and its own
+# titles are auto-generated, so it can list one event twice under two names.
+# That is what lets the fuzzy pass dedupe this source against itself.
+aggregator = true
 date_field = "auto"
 
 # Template for a venue with an undocumented JSON endpoint — copy, point, probe.

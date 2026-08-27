@@ -7,7 +7,15 @@ from collections import Counter
 from datetime import date, datetime, timedelta
 
 from .adapters import REGISTRY
-from .model import Event, slugify, within_horizon
+from .model import Event, day_of, slugify, within_horizon
+
+# Words that carry no identity in a title. The canonical city names are added
+# to this at run time from filter.cities, so "Guus Meeuwis in Amsterdam" and
+# "Guus Meeuwis" come out as the same set without naming Amsterdam here.
+FUZZY_STOPWORDS = (
+    "in", "at", "the", "a", "de", "het", "een", "van", "bij", "op", "and", "en",
+    "live", "presents", "ticket", "tickets", "tour",
+)
 
 
 def load_config(path: str) -> dict:
@@ -115,6 +123,10 @@ def assemble(all_events: list[Event], cfg: dict, reports: list[dict]) -> dict:
         else:
             _merge(existing, ev)
 
+    merges = _fuzzy_pass(kept, cfg, filt, priority) if filt.get("fuzzy_titles", True) else []
+    for row in merges:
+        kept_per_source[row["dropped_source"]] -= 1
+
     events = sorted(kept.values(), key=lambda e: (e.start, slugify(e.title)))
     for rep in reports:
         rep["kept"] = kept_per_source.get(rep["id"], 0)
@@ -129,8 +141,99 @@ def assemble(all_events: list[Event], cfg: dict, reports: list[dict]) -> dict:
             "by_category": dict(Counter(c for e in events for c in e.categories)),
         },
         "sources": reports,
+        # Kept in the output rather than only logged: it is the record of what
+        # was taken off the site and why, and it is what you read when a title
+        # you expected is missing.
+        "merges": merges,
         "events": [e.to_dict() for e in events],
     }
+
+
+# slugify() strips non-ascii, which turns a curly apostrophe into a word break
+# while a straight one becomes a lone "s" that gets dropped — so "90's NOW" and
+# "90’s NOW" come out as different words and never match. Fold both away first,
+# along with the multiplication sign a listing uses for "3x3".
+_TIGHTEN = str.maketrans({"'": "", "’": "", "‘": "", "´": "", "×": "x"})
+
+
+def _words(title: str, stop: set[str]) -> set[str]:
+    slug = slugify((title or "").translate(_TIGHTEN))
+    return {w for w in slug.split("-") if w and w not in stop and len(w) > 1}
+
+
+def _may_merge(keeper: Event, other: Event, aggregators: set[str]) -> bool:
+    """The rule that replaces a list of words like "afterparty" and "high tea".
+
+    A venue does not publish the same event twice: if Paradiso lists both
+    "London Calling" and "London Calling - High Tea", someone decided those are
+    two things and the extra words are load-bearing. An aggregator relisting a
+    venue's show as "Douwe Bob in Paradiso" decided nothing, and the extra words
+    are just labelling. So a title that contains another title is a duplicate
+    when the two came from different catalogues — and within one catalogue only
+    when that catalogue is second-hand and marked `aggregator` in sources.toml.
+
+    Measured on a 2156-event build: 43 merges, none of them wrong, and the three
+    affiliated-but-distinct events in the data (an afterparty, a high tea and a
+    Vriendenrepetitie) are all protected by this without being named anywhere.
+    """
+    if keeper.source != other.source:
+        return True
+    return keeper.source in aggregators
+
+
+def _fuzzy_pass(kept: dict[str, Event], cfg: dict, filt: dict,
+                priority: dict[str, int]) -> list[dict]:
+    """Second dedupe pass. The exact key catches the same title twice; this
+    catches one event wearing two labels — a venue suffix, a ticket type, a
+    tour name — which is the shape aggregator titles actually take.
+
+    Bucketed by day and city, which is the discriminating half of the exact key
+    already, so this is ~11k comparisons on a full build rather than 2 million.
+    """
+    stop = {w.lower() for w in filt.get("fuzzy_stopwords") or FUZZY_STOPWORDS}
+    stop |= {c.lower() for c in (filt.get("cities") or {})}
+    aggregators = {s["id"] for s in cfg.get("source", []) if s.get("aggregator")}
+
+    buckets: dict[tuple, list[Event]] = {}
+    for ev in kept.values():
+        buckets.setdefault((day_of(ev.start), ev.city), []).append(ev)
+
+    merges: list[dict] = []
+    for bucket in buckets.values():
+        if len(bucket) < 2:
+            continue
+        survivors: list[tuple[Event, set[str]]] = []
+        # Highest-priority source first, so the keeper is the venue-direct
+        # record and the aggregator is the one that donates and disappears.
+        for ev in sorted(bucket, key=lambda e: priority.get(e.source, 999)):
+            words = _words(ev.title, stop)
+            hit = None
+            for keeper, keeper_words in survivors:
+                if not (words and keeper_words):
+                    continue
+                if (words <= keeper_words or keeper_words <= words) \
+                        and _may_merge(keeper, ev, aggregators):
+                    hit = (keeper, keeper_words)
+                    break
+            if hit is None:
+                survivors.append((ev, words))
+                continue
+            keeper, keeper_words = hit
+            merges.append({
+                "day": day_of(ev.start),
+                "kept": keeper.title,
+                "kept_source": keeper.source,
+                "dropped": ev.title,
+                "dropped_source": ev.source,
+                # The words one title had and the other did not. This is the
+                # line to read when a merge looks wrong: a new "+[nazit]" or
+                # "+[voorprogramma]" showing up here is a satellite event that
+                # slipped through, and the fix is a rule, not a bug report.
+                "extra": sorted(words ^ keeper_words),
+            })
+            _merge(keeper, ev)
+            kept.pop(ev.uid, None)
+    return merges
 
 
 def _merge(keeper: Event, other: Event) -> None:

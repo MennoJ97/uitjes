@@ -24,6 +24,58 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 GREEN, RED, DIM, YEL, OFF = "\033[32m", "\033[31m", "\033[2m", "\033[33m", "\033[0m"
 
 
+def write_json(dataset: dict, path: str) -> None:
+    """Write via a temp file in the same directory and rename, so nginx never
+    serves a half-written JSON to someone loading the page mid-build."""
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as fh:
+        json.dump(dataset, fh, ensure_ascii=False, separators=(",", ":"))
+    os.replace(tmp_path, path)
+
+
+def guard(dataset: dict, out_path: str, cfg: dict) -> list[str]:
+    """Reasons this build should not replace the one already published.
+
+    Only ever compares against the live file, so the first run, a moved output
+    path or an unreadable previous build all publish without argument. A source
+    that is newly added, or one that is now disabled on purpose, is skipped too:
+    the guard is looking for a source that used to work and has gone quiet.
+    """
+    rules = cfg.get("publish", {})
+    floor = int(rules.get("min_events_to_guard", 20))
+    source_drop = float(rules.get("source_drop_fraction", 0.5))
+    total_drop = float(rules.get("total_drop_fraction", 0.2))
+
+    try:
+        with open(out_path, encoding="utf-8") as fh:
+            previous = json.load(fh)
+    except (OSError, ValueError):
+        return []
+
+    was = {r["id"]: r.get("kept", 0) for r in previous.get("sources", [])}
+    now = {r["id"]: r for r in dataset.get("sources", [])}
+    problems = []
+
+    for sid, before in was.items():
+        report = now.get(sid)
+        # Below the floor a source is too small to be worth blocking a publish
+        # over: Ajax announcing five home games instead of twelve is not a bug.
+        if report is None or before < floor:
+            continue
+        if report.get("error") == "disabled":
+            continue
+        after = report.get("kept", 0)
+        if after < before * source_drop:
+            why = report.get("error") or "no error reported, so check the source"
+            problems.append(f"{sid}: {before} events last build, {after} now ({why})")
+
+    before_total = (previous.get("counts") or {}).get("total", 0)
+    after_total = (dataset.get("counts") or {}).get("total", 0)
+    if before_total >= floor and after_total < before_total * (1 - total_drop):
+        problems.append(f"total: {before_total} events last build, {after_total} now")
+    return problems
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -34,6 +86,8 @@ def main() -> int:
     ap.add_argument("--list", action="store_true", help="list sources and exit")
     ap.add_argument("--refresh", action="store_true", help="ignore the HTTP cache")
     ap.add_argument("--serve", action="store_true", help="serve web/ after building")
+    ap.add_argument("--force", action="store_true",
+                    help="publish even if the guard says this build looks broken")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--out", help="where to write events.json "
                                   "(default: web/data/events.json)")
@@ -61,6 +115,9 @@ def main() -> int:
         refresh=args.refresh or bool(args.probe),
         timeout=int(cfg.get("http", {}).get("timeout_seconds", 25)),
         delay=float(cfg.get("http", {}).get("delay_seconds", 0.4)),
+        retries=int(cfg.get("http", {}).get("retries", 2)),
+        retry_backoff=float(cfg.get("http", {}).get("retry_backoff_seconds", 1.0)),
+        host_failure_limit=int(cfg.get("http", {}).get("host_failure_limit", 4)),
     )
 
     defaults = cfg.get("defaults", {})
@@ -92,12 +149,6 @@ def main() -> int:
     dataset = assemble(all_events, cfg, reports)
     out_path = args.out or os.path.join(ROOT, "web", "data", "events.json")
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
-    # Write via a temp file in the same directory and rename, so nginx never
-    # serves a half-written JSON to someone loading the page mid-build.
-    tmp_path = out_path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as fh:
-        json.dump(dataset, fh, ensure_ascii=False, separators=(",", ":"))
-    os.replace(tmp_path, out_path)
 
     counts = dataset["counts"]
     print(f"\n{GREEN}{counts['total']} events{OFF} after filtering "
@@ -108,9 +159,45 @@ def main() -> int:
     print("  by category: " + ", ".join(f"{k} {v}" for k, v in
                                         sorted(counts["by_category"].items(),
                                                key=lambda kv: -kv[1])))
+    # A retry that worked leaves no other trace, and a run that needed a lot of
+    # them is a slow host worth knowing about before it becomes a failed source.
+    if http.retried:
+        print(f"  {DIM}{http.retried} request(s) retried{OFF}")
+
     kept_lines = [r for r in reports if r["kept"] or (r["error"] and r["error"] != "disabled")]
     if kept_lines:
         print("  kept per source: " + ", ".join(f"{r['id']} {r['kept']}" for r in kept_lines))
+
+    # Printed in full rather than counted: a merge takes an event off the site,
+    # so every one of them should be readable in the log that made it. The
+    # `extra` words are the tell — if a satellite event ("+[nazit]") ever shows
+    # up here, that is a rule to add, not a mystery to debug.
+    merges = dataset.get("merges") or []
+    if merges:
+        print(f"\n{YEL}{len(merges)} fuzzy title merges{OFF}")
+        for row in merges:
+            print(f"  {DIM}{row['day']}{OFF} +{row['extra']}  "
+                  f"{row['kept']} {DIM}({row['kept_source']}){OFF}"
+                  f"  <-  {row['dropped']} {DIM}({row['dropped_source']}){OFF}")
+    # Compare against what is already published before replacing it. A source
+    # that breaks does not fail the build - by design, one bad source degrades
+    # the dataset rather than killing it - which on 2026-08-27 quietly published
+    # a site missing all 227 Melkweg events. Retries make that rarer; this makes
+    # it visible. Refusing to publish is safe: the previous events.json stays,
+    # and the next scheduled run tries again in a few hours.
+    problems = [] if args.force else guard(dataset, out_path, cfg)
+    if problems:
+        rejected = out_path + ".rejected"
+        write_json(dataset, rejected)
+        print(f"\n{RED}NOT PUBLISHED{OFF} - this build looks broken:")
+        for line in problems:
+            print(f"  - {line}")
+        print(f"\n  {out_path} is unchanged and still serving the last good build.")
+        print(f"  This one is at {rejected} if you want to look at it.")
+        print(f"  {DIM}Re-run with --force to publish it anyway.{OFF}")
+        return 1
+
+    write_json(dataset, out_path)
     print(f"\nwrote {out_path}")
 
     if args.serve:

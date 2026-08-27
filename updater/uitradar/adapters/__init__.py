@@ -6,8 +6,8 @@ exposes is tunable from config without touching Python.
 """
 from __future__ import annotations
 
-from . import (carre, ics, json_api, jsonld, manual, regex_cards, rss, rss_json,
-               ticketmaster, tribe, ziggodome)
+from . import (boomchicago, carre, ics, json_api, jsonld, manual, paradiso,
+               regex_cards, rss, rss_json, ticketmaster, tribe, ziggodome)
 
 REGISTRY = {
     "tribe": tribe.fetch,
@@ -15,6 +15,8 @@ REGISTRY = {
     "json_api": json_api.fetch,
     "rss_json": rss_json.fetch,
     "carre": carre.fetch,
+    "boomchicago": boomchicago.fetch,
+    "paradiso": paradiso.fetch,
     "ziggodome": ziggodome.fetch,
     "ticketmaster": ticketmaster.fetch,
     "ics": ics.fetch,

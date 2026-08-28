@@ -86,6 +86,72 @@ function matches(ev) {
   return true;
 }
 
+/* ---------- filters in the URL ----------
+   The whole point of this page is sending someone a link, so a filtered view
+   has to survive being copied out of the address bar: ?city=Amsterdam&
+   cat=comedy&when=weekend is an answer to "what shall we do Saturday", where
+   the bare URL is only ever the unfiltered front page.
+
+   replaceState rather than pushState: every keystroke in the search box is a
+   state change, and pushing those would make the back button walk out of the
+   query one letter at a time instead of leaving the page. Defaults are left
+   out, so an untouched page keeps a clean URL. */
+const URL_RANGES = new Set(["today", "weekend", "7", "30", "all"]);
+// The search box's text as typed. state.q is the lowercased form matches() uses,
+// but a link reading ?q=Jeff+Buckley is friendlier than ?q=jeff+buckley, and the
+// search is case-insensitive either way.
+let qRaw = "";
+
+function readUrlState() {
+  const p = new URLSearchParams(location.search);
+
+  qRaw = (p.get("q") || "").trim();
+  state.q = qRaw.toLowerCase();
+
+  // Everything below is checked against what this build actually contains, so
+  // a link that outlived a renamed city or a category that no longer has any
+  // events degrades to the unfiltered page rather than to a blank one.
+  const city = (p.get("city") || "").toLowerCase();
+  const known = (DATA.cities || []).find((c) => c.toLowerCase() === city);
+  if (known) state.city = known;
+
+  (p.get("cat") || "").split(",").forEach((c) => {
+    const key = c.trim().toLowerCase();
+    if (CATEGORY_LABEL[key]) state.cats.add(key);
+  });
+
+  // A link naming a day that has already passed is stale rather than wrong, and
+  // an empty page explains nothing — fall back to the default window.
+  const date = p.get("date");
+  if (date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= TODAY_KEY) {
+    state.range = "date";
+    state.date = date;
+    return;
+  }
+  const when = p.get("when");
+  if (when && URL_RANGES.has(when)) state.range = when;
+}
+
+function writeUrlState() {
+  const p = new URLSearchParams();
+  if (state.q) p.set("q", qRaw || state.q);
+  if (state.city !== "all") p.set("city", state.city);
+  // Sorted, so the same set of pills always produces the same link whatever
+  // order they were clicked in.
+  if (state.cats.size) p.set("cat", [...state.cats].sort().join(","));
+  if (state.range === "date") p.set("date", state.date);
+  else if (state.range !== "all") p.set("when", state.range);
+
+  // URLSearchParams percent-encodes the comma between categories. A comma is
+  // legal in a query value and ?cat=comedy,theatre is a good deal easier to
+  // read in a message than ?cat=comedy%2Ctheatre, so put it back.
+  const qs = p.toString().replace(/%2C/g, ",");
+  try {
+    history.replaceState(null, "",
+                         location.pathname + (qs ? "?" + qs : "") + location.hash);
+  } catch (e) { /* file:// and sandboxed frames refuse this; filters still work */ }
+}
+
 /** What the "when" control currently says, in words. */
 function whenLabel() {
   if (state.range === "date") return DAY_FMT.format(asDate(state.date));
@@ -161,6 +227,10 @@ function card(ev) {
 }
 
 function render() {
+  // Every control ends up here, which makes this the one place the URL has to
+  // be kept in step with the filters.
+  writeUrlState();
+
   const hits = DATA.events.filter(matches);
   const results = $("#results");
   results.replaceChildren();
@@ -220,7 +290,7 @@ function buildPills() {
     .filter((c) => counts[c])
     .sort((a, b) => counts[b] - counts[a])
     .forEach((c) => {
-      const b = el("button");
+      const b = el("button", state.cats.has(c) ? "on" : null);
       b.append(document.createTextNode(CATEGORY_LABEL[c]));
       b.append(el("span", "n", counts[c]));
       b.addEventListener("click", () => {
@@ -256,6 +326,19 @@ function buildPills() {
   dateInput.min = TODAY_KEY;
   dateInput.max = days.length ? days[days.length - 1] : TODAY_KEY;
 
+  // A link can arrive with a preset or a single day already chosen. index.html
+  // marks "Everything" as the default, so move the highlight to match. Set
+  // after min/max above, or the picker rejects the value.
+  if (state.range === "date") {
+    dateInput.value = state.date;
+    dateInput.classList.add("on");
+    dateClear.hidden = false;
+    [...$("#when").children].forEach((c) => c.classList.remove("on"));
+  } else {
+    [...$("#when").children].forEach((c) =>
+      c.classList.toggle("on", c.dataset.range === state.range));
+  }
+
   dateInput.addEventListener("change", () => {
     if (!dateInput.value) { selectPreset($('#when button[data-range="all"]')); return; }
     state.range = "date";
@@ -269,10 +352,16 @@ function buildPills() {
   dateClear.addEventListener("click", () =>
     selectPreset($('#when button[data-range="all"]')));
 
+  $("#q").value = qRaw;
+
   let timer;
   $("#q").addEventListener("input", (e) => {
     clearTimeout(timer);
-    timer = setTimeout(() => { state.q = e.target.value.trim().toLowerCase(); render(); }, 120);
+    timer = setTimeout(() => {
+      qRaw = e.target.value.trim();
+      state.q = qRaw.toLowerCase();
+      render();
+    }, 120);
   });
 }
 
@@ -353,6 +442,8 @@ fetch("data/events.json", { cache: "no-store" })
   .then((r) => r.json())
   .then((data) => {
     DATA = data;
+    // Before buildPills, which paints the pills from state.
+    readUrlState();
     buildPills();
     initCollapse();
     trackBarHeight();

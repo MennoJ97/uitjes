@@ -83,6 +83,7 @@ Utrecht = [
   "maarssen", "bunnik", "vleuten", "amersfoort",
   "tivolivredenburg", "tivoli", "stadsschouwburg utrecht", "ekko",
   "de helling", "db's", "theater kikker", "domtoren", "pieterskerk",
+  "comedyhuis", "de kargadoor",
 ]
 
 [output]
@@ -99,6 +100,7 @@ source_priority = [
   "kleine_komedie",
   "boomchicago",
   "stadsschouwburg_utrecht",
+  "comedyhuis",
   "melkweg",
   "ziggodome",
   "afaslive",
@@ -525,6 +527,64 @@ fallback_categories = ["comedy"]
 [source.category_map]
 "sunday night live" = "comedy"
 "pro wrestling holland live x boom chicago" = "comedy"
+
+
+# ---------------------------------------------------------------------------
+# COMEDYHUIS — Utrecht's comedy club, and the busiest comedy programme in the
+# city: ~170 shows inside the horizon, most nights of the week. WordPress with
+# the shows as a `portfolio` post type, so the whole programme comes off the
+# public REST API — no scraping, and the date is a proper field instead of a
+# slug. The show date lives in two ACF fields (`datum` 20270518, `starttijd`
+# 20:30:00), which is what fields.start_time below is for.
+#
+# `_fields` in the URL is not decoration: without it every row drags its
+# rendered content and full Yoast head along and the nine pages cost ~700 KB
+# instead of ~90 KB.
+#
+# The API answers a page past the end with HTTP 400 rather than an empty list,
+# hence stop_on_page_error. The list is ordered by publish date, newest first,
+# and only grows, so the pages below stay valid as they add shows; the walk
+# ends on its own at whatever the last page currently is.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "comedyhuis"
+label = "Comedyhuis"
+adapter = "json_api"
+enabled = true
+url = "https://comedyhuis.nl/wp-json/wp/v2/portfolio?per_page=100&page={page}&_fields=link,title.rendered,acf.datum,acf.starttijd,acf.beschrijving_show,acf.locatie,yoast_head_json.og_image"
+pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+stop_on_page_error = true
+base_url = "https://comedyhuis.nl"
+default_venue = "Comedyhuis"
+default_city = "Utrecht"
+# A comedy club, and the API publishes no genre whatsoever — so the category is
+# not inferred here, it is stated. Inference reads the description as well as
+# the title, and a comedian's blurb that mentions being "live" or "on tour"
+# came out a concert; the end-of-course show came out a lecture.
+force_categories = ["comedy"]
+
+[source.fields]
+title = "title.rendered"
+start = "acf.datum"
+start_time = "acf.starttijd"
+summary = "acf.beschrijving_show"
+# An address, not a name — see venue_map below.
+venue = "acf.locatie"
+url = "link"
+# No featured-image field in the REST payload, but Yoast publishes it as the
+# og:image of the show page, which is the same asset.
+image = "yoast_head_json.og_image[0].url"
+
+# `locatie` is the street address of the room, which is the one thing on a card
+# that should not be an address. Only their own two houses and the two bars they
+# play in need naming — the theatres they visit (Venster, TivoliVredenburg,
+# Theater aan de Slinger) are already in this field by name. Anything new passes
+# through as the address until it is named here.
+[source.venue_map]
+"catharijnepoort 6" = "Comedyhuis Club"
+"oudegracht 36" = "De Kargadoor"
+"oudegracht aan de werf 145" = "Kartoffel"
+"wolvenstraat 10" = "Moira"
 
 
 # ---------------------------------------------------------------------------

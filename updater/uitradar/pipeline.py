@@ -49,13 +49,28 @@ def run_source(spec: dict, http, root: str) -> tuple[list[Event], dict]:
         return [], report
 
     fallback = list(spec.get("fallback_categories") or [])
+    # The stronger sibling of fallback_categories, for a venue that only does
+    # one thing and publishes no genre at all: take the category from the
+    # config and never infer. Inference reads the marketing copy, and a
+    # comedian's blurb saying "live" or "on tour" comes out a concert.
+    forced = list(spec.get("force_categories") or [])
+    # Some sources publish an address where the site wants a name: Comedyhuis
+    # says "Catharijnepoort 6", which is a correct answer to a different
+    # question. Maps the raw string (case-insensitively) onto what to show;
+    # anything unmapped passes through untouched, so a new location appears as
+    # the source spelled it rather than disappearing.
+    venue_map = {k.strip().lower(): v for k, v in (spec.get("venue_map") or {}).items()}
     for ev in events:
         ev.source = sid
         ev.source_label = spec.get("label", sid)
+        if venue_map and ev.venue:
+            ev.venue = venue_map.get(ev.venue.strip().lower(), ev.venue)
         ev.finalise()
+        if forced:
+            ev.categories = list(forced)
         # A concert hall's unclassifiable events are still concerts. Only fires
         # after keyword inference has already failed.
-        if fallback and ev.categories == ["other"]:
+        elif fallback and ev.categories == ["other"]:
             ev.categories = fallback
     report["count"] = len(events)
     report["seconds"] = round(time.time() - started, 2)

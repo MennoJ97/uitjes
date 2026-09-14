@@ -16,6 +16,17 @@ Rather than a bespoke module each time, describe the response in sources.toml:
   venue = "attributes.location.name"
   image = "attributes.image.src"
 
+A date and a clock in two separate fields (the shape every ACF/WordPress
+agenda has) is `fields.start_time` — it is folded into a date-only `start`:
+
+  start      = "acf.datum"           # 20270518
+  start_time = "acf.starttijd"       # 20:30:00
+
+`stop_on_page_error = true` ends the page walk on the first page that fails
+instead of failing the source, for an API that answers a page past the end with
+an error rather than an empty list (WordPress returns HTTP 400). The first page
+still has to work, so a dead host is still a failed source, not a silent zero.
+
 `build.py --probe <id>` prints what came back so you can iterate on the paths.
 """
 from __future__ import annotations
@@ -23,9 +34,10 @@ from __future__ import annotations
 from urllib.parse import urljoin
 
 from ..model import Event, classify, parse_dt
+from ..net import FetchError
 
-FIELDS = ("title", "start", "end", "venue", "city", "url", "image", "summary",
-          "price", "category")
+FIELDS = ("title", "start", "start_time", "end", "venue", "city", "url", "image",
+          "summary", "price", "category")
 
 
 def _dig(node, path: str):
@@ -60,12 +72,22 @@ def fetch(cfg: dict, http) -> list[Event]:
 
     cmap = {k.lower(): v for k, v in (cfg.get("category_map") or {}).items()}
     base = cfg.get("base_url") or templates[0]
+    stop_on_page_error = bool(cfg.get("stop_on_page_error"))
     out: list[Event] = []
 
     for template in templates:
         for page in pages:
             url = template.replace("{page}", str(page)) if page is not None else template
-            payload = http.get_json(url, headers=cfg.get("headers"), ttl=cfg.get("ttl"))
+            try:
+                payload = http.get_json(url, headers=cfg.get("headers"), ttl=cfg.get("ttl"))
+            except FetchError:
+                # Walking one page past the end is how you find the end on an
+                # API that errors instead of answering with []. Only once
+                # something has already been read: page one failing is the host
+                # being down, and that is a failed source, not an empty one.
+                if stop_on_page_error and out:
+                    break
+                raise
             rows = _dig(payload, cfg.get("list_path", ""))
             if isinstance(rows, dict):
                 rows = list(rows.values())
@@ -83,6 +105,16 @@ def _to_event(row, fields: dict, cfg: dict, cmap: dict, base: str) -> Event | No
     start, all_day = parse_dt(get("start"))
     if not start:
         return None
+    # A date-only `start` plus a separate clock field is one timed event, not an
+    # all-day one. Keyed on all_day rather than on the length of `start`:
+    # parse_dt pads a bare date out to midnight, so a date-only value is
+    # already 16 characters by the time it gets here. Only fills in a time that
+    # is missing — a `start` that carries its own is the more specific field.
+    clock = get("start_time")
+    if all_day and clock:
+        stamped, _ = parse_dt(f"{start[:10]} {str(clock)[:5]}")
+        if stamped:
+            start, all_day = stamped, False
 
     href, image = get("url"), get("image")
     category = get("category")

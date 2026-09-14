@@ -205,9 +205,26 @@ class Event:
 
 
 def dedupe_key(ev: Event) -> str:
+    """Title + day + clock + city.
+
+    The clock is in the key because two performances of one show in one night
+    are two evenings out, not a duplicate — Comedytrain plays the same Line-up
+    at 19:00 and 22:00, Carré runs the Wereldkerstcircus at 16:00 and 20:00,
+    and a key of title+day+city published one and threw the other away. It was
+    costing 177 performances: Stadsschouwburg Utrecht 87, Carré 34,
+    Concertgebouw 28, Comedytrain 19, AFAS Live 5, Ziggo Dome 3. An all-day
+    record has no clock to compare and keeps the day on its own, so a venue
+    that publishes dates without times is unaffected.
+
+    What this key no longer catches is one event that two sources time
+    differently (doors vs. curtain). That is the fuzzy pass's job — see
+    _may_merge in pipeline.py, which merges identical titles across two
+    catalogues whatever the clock says.
+    """
     base = "|".join([
         slugify(ev.title)[:60],
         day_of(ev.start) or "",
+        "" if ev.all_day else (ev.start or "")[11:16],
         slugify(ev.city or "")[:20],
     ])
     return hashlib.sha1(base.encode()).hexdigest()[:16]

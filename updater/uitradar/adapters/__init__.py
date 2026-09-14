@@ -7,7 +7,8 @@ exposes is tunable from config without touching Python.
 from __future__ import annotations
 
 from . import (boomchicago, carre, ics, json_api, jsonld, manual, paradiso,
-               regex_cards, rss, rss_json, ticketmaster, tribe, ziggodome)
+               regex_cards, rss, rss_json, ticketmaster, tribe, weeztix,
+               ziggodome)
 
 REGISTRY = {
     "tribe": tribe.fetch,
@@ -23,6 +24,7 @@ REGISTRY = {
     "rss": rss.fetch,
     "manual": manual.fetch,
     "regex_cards": regex_cards.fetch,
+    "weeztix": weeztix.fetch,
 }
 
 __all__ = ["REGISTRY"]

@@ -9,7 +9,7 @@
 #
 # Adapters: tribe | jsonld | json_api | ticketmaster | ics | rss |
 #           regex_cards | manual | carre | ziggodome | boomchicago | paradiso |
-#           rss_json
+#           rss_json | weeztix
 
 [http]
 cache_ttl_seconds = 3600   # re-fetch at most hourly while you iterate
@@ -74,7 +74,7 @@ Amsterdam = [
   "zaandam", "haarlem", "ziggo dome", "afas live", "johan cruijff",
   "paradiso", "melkweg", "concertgebouw", "carré", "carre", "muziekgebouw",
   "de la mar", "internationaal theater", "bimhuis", "royal theater tuschinski",
-  "kleine komedie", "boom chicago",
+  "kleine komedie", "boom chicago", "comedytrain", "westergas",
   # Rooms Paradiso programmes but does not own — see the paradiso source.
   "tolhuistuin", "bitterzoet", "zonnehuis", "cinetol", "skatecafe",
 ]
@@ -101,6 +101,7 @@ source_priority = [
   "boomchicago",
   "stadsschouwburg_utrecht",
   "comedyhuis",
+  "comedytrain",
   "melkweg",
   "ziggodome",
   "afaslive",
@@ -585,6 +586,45 @@ image = "yoast_head_json.og_image[0].url"
 "oudegracht 36" = "De Kargadoor"
 "oudegracht aan de werf 145" = "Kartoffel"
 "wolvenstraat 10" = "Moira"
+
+
+# ---------------------------------------------------------------------------
+# COMEDYTRAIN — the Amsterdam stand-up institution, playing most nights in two
+# rooms. Left Toomler for Westergas in 2025 (their own Instagram handle is
+# still "comedytrain.voorheen.toomler"), so the address here is Pazzanistraat.
+#
+# There is nothing to scrape: comedytrain.nl embeds a Weeztix ticket shop and
+# keeps no agenda of its own — its `voorstelling` post type is empty over REST.
+# So this reads the shop, which is one anonymous request for the whole year.
+# See adapters/weeztix.py for the box-office string the title has to be pulled
+# out of, and for why every card links to the venue's ticket page rather than
+# to a per-event URL.
+#
+# This is the source that made the clock part of the dedupe key: it plays the
+# same Line-up twice on a Friday (19:00 and 22:00), and on a title+day+city
+# key the second one was thrown away. 19 rows here, 158 more across the
+# theatres that run a matinee and an evening -- see dedupe_key in model.py.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "comedytrain"
+label = "Comedytrain"
+adapter = "weeztix"
+enabled = true
+# The GUID in the shop embed on https://www.comedytrain.nl/tickets/.
+shop = "3190150b-4b80-11f0-a9cb-7e126431635e"
+# Not a fallback: the shop has no per-event permalink, so this is the link on
+# every card. The ticket shop is embedded on this page.
+base_url = "https://www.comedytrain.nl/tickets/"
+default_venue = "Comedytrain"
+default_city = "Amsterdam"
+# Weeztix categorises the whole programme as "other" — there is nothing to
+# infer from, and everything here is stand-up.
+force_categories = ["comedy"]
+
+# The rooms, as the box office names them.
+[source.venue_map]
+"comedytrain - westergas - grote zaal" = "Comedytrain, Grote Zaal"
+"comedytrain - westergas - kleine zaal" = "Comedytrain, Kleine Zaal"
 
 
 # ---------------------------------------------------------------------------

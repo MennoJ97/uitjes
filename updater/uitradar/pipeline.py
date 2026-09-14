@@ -176,7 +176,8 @@ def _words(title: str, stop: set[str]) -> set[str]:
     return {w for w in slug.split("-") if w and w not in stop and len(w) > 1}
 
 
-def _may_merge(keeper: Event, other: Event, aggregators: set[str]) -> bool:
+def _may_merge(keeper: Event, other: Event, aggregators: set[str],
+               identical: bool = False) -> bool:
     """The rule that replaces a list of words like "afterparty" and "high tea".
 
     A venue does not publish the same event twice: if Paradiso lists both
@@ -190,9 +191,23 @@ def _may_merge(keeper: Event, other: Event, aggregators: set[str]) -> bool:
     Measured on a 2156-event build: 43 merges, none of them wrong, and the three
     affiliated-but-distinct events in the data (an afterparty, a high tea and a
     Vriendenrepetitie) are all protected by this without being named anywhere.
+
+    Two DIFFERENT venue-direct sources are the third case, and one title
+    merely CONTAINING another across two of them never merges: a venue
+    publishes its own programme and nobody else's, so that is a coincidence,
+    not a duplicate. Two *identical* titles are the exception, because that is
+    one event with two publishers — Comedyhuis and TivoliVredenburg both
+    listing the night Comedyhuis programmes in Tivoli's hall. Those used to be
+    caught by the exact key and are caught here now that the key knows about
+    the clock.
+    Comedytrain's "Comedytrain presents: Mike Rice" contains Melkweg's act
+    "mike." on the same night, which without this took a real Melkweg concert
+    off the site and hung its photo on a comedy show. Checked against a live
+    61-merge build: not one of them was venue-direct to venue-direct, so this
+    costs nothing and only ever prevents that shape.
     """
     if keeper.source != other.source:
-        return True
+        return identical or keeper.source in aggregators or other.source in aggregators
     return keeper.source in aggregators
 
 
@@ -223,13 +238,22 @@ def _fuzzy_pass(kept: dict[str, Event], cfg: dict, filt: dict,
         for ev in sorted(bucket, key=lambda e: priority.get(e.source, 999)):
             words = _words(ev.title, stop)
             hit = None
+            # The CLOSEST title, not the first one that contains it. An
+            # aggregator's one-word "mike." is inside both Melkweg's "mike."
+            # and Comedytrain's "Comedytrain presents: Mike Rice"; taking the
+            # first match hung it on whichever source ranked higher, which is
+            # how it ended up donating its photo to the wrong show. The
+            # smallest symmetric difference is the one that adds the least.
+            best = None
             for keeper, keeper_words in survivors:
                 if not (words and keeper_words):
                     continue
                 if (words <= keeper_words or keeper_words <= words) \
-                        and _may_merge(keeper, ev, aggregators):
-                    hit = (keeper, keeper_words)
-                    break
+                        and _may_merge(keeper, ev, aggregators,
+                                       identical=words == keeper_words):
+                    distance = len(words ^ keeper_words)
+                    if best is None or distance < best:
+                        best, hit = distance, (keeper, keeper_words)
             if hit is None:
                 survivors.append((ev, words))
                 continue
@@ -238,8 +262,10 @@ def _fuzzy_pass(kept: dict[str, Event], cfg: dict, filt: dict,
                 "day": day_of(ev.start),
                 "kept": keeper.title,
                 "kept_source": keeper.source,
+                "kept_start": keeper.start,
                 "dropped": ev.title,
                 "dropped_source": ev.source,
+                "dropped_start": ev.start,
                 # The words one title had and the other did not. This is the
                 # line to read when a merge looks wrong: a new "+[nazit]" or
                 # "+[voorprogramma]" showing up here is a satellite event that

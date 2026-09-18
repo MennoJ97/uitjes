@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="nl" data-site="uitjes">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>UITradar — events in and around Amsterdam & Utrecht</title>
-<meta name="description" content="One agenda for concerts, theatre, festivals and markets in and around Amsterdam and Utrecht.">
+<title>uitjes — Amsterdam en Utrecht</title>
+<meta name="description" content="Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht, in één agenda.">
 <!-- Public, but deliberately kept out of search results: this aggregates other
      people's programmes, so it should be a link you send, not a search hit.
      Paired with a Disallow-everything robots.txt. -->
@@ -13,71 +13,73 @@
      real 1200x630 raster (SVG is not unfurled), which nothing here generates. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="uitjes.mhjansen.nl">
-<meta property="og:title" content="Uitjes — Amsterdam & Utrecht">
+<meta property="og:title" content="uitjes — Amsterdam en Utrecht">
 <meta property="og:description" content="Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht. Eén agenda, samengesteld uit de programma's van de zalen zelf.">
 <meta property="og:url" content="https://uitjes.mhjansen.nl/">
 <meta property="og:locale" content="nl_NL">
-<link rel="stylesheet" href="style.css?v=b56d27b9">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📻</text></svg>">
+<!-- family.css first: Helvetica, the shared greys, and this site's red via
+     data-site="uitjes" above. style.css only lays the page out. -->
+<link rel="stylesheet" href="https://mhjansen.nl/family.css">
+<link rel="stylesheet" href="style.css?v=1a09d47f">
+<link rel="icon" href="https://mhjansen.nl/favicon.svg" type="image/svg+xml">
 </head>
 <body>
 
-<header class="masthead">
+<!-- The way back up to the apex page, which lists this site alongside the
+     others; the apex links here, so the link goes both ways. Same bar as
+     stonks and vibeplanning. -->
+<nav class="topnav" aria-label="mhjansen.nl">
   <div class="wrap">
-    <div class="brand">
-      <!-- The way back up to the apex disambiguation page, which lists this
-           site alongside the others. The apex links here, so the link goes
-           both ways -- same as vibeplanning and stonks. -->
-      <a class="up" href="https://mhjansen.nl">&#8598; mhjansen.nl</a>
-      <h1>UIT<span>radar</span></h1>
-      <p class="tagline">Concerts, theatre, festivals and markets — Amsterdam &amp; Utrecht</p>
-    </div>
-    <button class="ghost" id="sources-toggle" aria-expanded="false">Sources</button>
+    <span class="brand"><a class="apex" href="https://mhjansen.nl">mhjansen.nl</a> / <a href="/">uitjes</a></span>
+    <button class="link" id="sources-toggle" aria-expanded="false" aria-controls="sources-panel">Bronnen</button>
   </div>
-</header>
+</nav>
 
 <section class="sources-panel" id="sources-panel" hidden>
   <div class="wrap">
     <table id="sources-table">
-      <thead><tr><th>Source</th><th>Adapter</th><th class="num">Fetched</th><th class="num">Used</th><th>Status</th></tr></thead>
+      <thead><tr><th>Bron</th><th>Adapter</th><th class="num">Opgehaald</th><th class="num">Gebruikt</th><th>Status</th></tr></thead>
       <tbody></tbody>
     </table>
-    <p class="note">Edit <code>sources.toml</code> to add, disable or re-point a source, then re-run <code>python3 build.py</code>.</p>
+    <p class="note">Een bron toevoegen, uitzetten of omleiden: pas <code>sources.toml</code> aan en draai daarna <code>python3 build.py</code> opnieuw.</p>
   </div>
 </section>
 
-<nav class="filters" id="filters">
+<header class="intro wrap">
+  <h1>uitjes</h1>
+  <p class="tagline">Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht, in één agenda
+    uit de programma's van de zalen zelf.</p>
+</header>
+
+<nav class="filters" id="filters" aria-label="Filters">
   <div class="wrap">
-    <!-- Always visible, even when the rest is collapsed: it is the only thing
-         anchoring the sticky bar, and the toggle has to stay reachable. -->
-    <div class="bar-head">
-      <button class="ghost toggle" id="filters-toggle" aria-expanded="true" aria-controls="filter-rows">
-        <span class="chev" aria-hidden="true">▾</span> Filters
-      </button>
-      <p class="tally" id="tally"></p>
-    </div>
     <div id="filter-rows">
-    <div class="row">
-      <input type="search" id="q" placeholder="Search artist, show, venue…" autocomplete="off" spellcheck="false">
-      <div class="pills" id="cities" role="group" aria-label="City"></div>
-    </div>
-    <div class="row">
-      <div class="pills when" id="when" role="group" aria-label="When">
-        <button data-range="today">Today</button>
-        <button data-range="weekend">This weekend</button>
-        <button data-range="7">7 days</button>
-        <button data-range="30">30 days</button>
-        <button data-range="all" class="on">Everything</button>
+      <div class="row">
+        <input type="search" id="q" placeholder="Zoek op artiest, voorstelling of zaal" aria-label="Zoeken" autocomplete="off" spellcheck="false">
+        <div class="seg" id="cities" role="group" aria-label="Stad"></div>
+        <div class="seg" id="when" role="group" aria-label="Wanneer">
+          <button data-range="today">Vandaag</button>
+          <button data-range="weekend">Dit weekend</button>
+          <button data-range="7">7 dagen</button>
+          <button data-range="30">30 dagen</button>
+          <button data-range="all" class="on">Alles</button>
+        </div>
+        <div class="onday">
+          <label for="date">op</label>
+          <input type="date" id="date" aria-label="Eén dag kiezen">
+          <button type="button" id="date-clear" hidden aria-label="Gekozen dag wissen">&times;</button>
+        </div>
+        <details class="catpick" id="catpick">
+          <summary id="cats-summary">Alle categorieën</summary>
+          <div class="catmenu" id="cats" role="group" aria-label="Categorieën"></div>
+        </details>
       </div>
-      <div class="onday">
-        <label for="date">on</label>
-        <input type="date" id="date" aria-label="Show a single day">
-        <button type="button" id="date-clear" hidden aria-label="Clear the chosen day">&times;</button>
-      </div>
     </div>
-    <div class="row">
-      <div class="pills cats" id="cats" role="group" aria-label="Category"></div>
-    </div>
+    <!-- Always visible, even when the controls are collapsed: it says what is
+         applied, and the toggle has to stay reachable. -->
+    <div class="bar-head">
+      <button class="link toggle" id="filters-toggle" aria-expanded="true" aria-controls="filter-rows">Filters verbergen</button>
+      <p class="tally" id="tally"></p>
     </div>
   </div>
 </nav>
@@ -86,9 +88,9 @@
 
 <footer class="wrap">
   <p id="footnote"></p>
-  <p class="note">Events marked <span class="badge prov">unconfirmed</span> come from hand-entered recurrences and have not been checked against the organiser.</p>
+  <p class="note">Uitjes gemarkeerd als <span class="flag">onbevestigd</span> komen uit handmatig ingevoerde herhalingen en zijn niet gecontroleerd bij de organisator.</p>
 </footer>
 
-<script src="app.js?v=57b48a89"></script>
+<script src="app.js?v=24b08a9c"></script>
 </body>
 </html>

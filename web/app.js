@@ -1,11 +1,16 @@
-/* UITradar front-end — no dependencies, reads web/data/events.json */
+/* uitjes front-end — no dependencies, reads data/events.json */
 
-const CATEGORY_LABEL = {
-  concert: "Concerts", classical: "Classical", club: "Club", theatre: "Theatre",
-  dance: "Dance", comedy: "Comedy", film: "Film", festival: "Festivals",
-  market: "Markets", exhibition: "Exhibitions", family: "Family", talk: "Talks",
-  sports: "Sports", other: "Other",
+/* Category keys are the data's (English, from the builder); what people see is
+   Dutch. Plural for the filter menu, singular for the line under an event. */
+const CATEGORY = {
+  concert: ["Concerten", "concert"], classical: ["Klassiek", "klassiek"], club: ["Club", "club"],
+  theatre: ["Theater", "theater"], dance: ["Dans", "dans"], comedy: ["Comedy", "comedy"],
+  film: ["Film", "film"], festival: ["Festivals", "festival"], market: ["Markten", "markt"],
+  exhibition: ["Exposities", "expositie"], family: ["Familie", "familie"], talk: ["Lezingen", "lezing"],
+  sports: ["Sport", "sport"], other: ["Overig", "overig"],
 };
+const catPlural = (c) => (CATEGORY[c] || [c])[0];
+const catSingular = (c) => (CATEGORY[c] || [c, c])[1];
 
 const state = { q: "", city: "all", cats: new Set(), range: "all", date: null };
 let DATA = { events: [], sources: [], counts: {}, generated_at: null };
@@ -17,6 +22,7 @@ const el = (tag, cls, text) => {
   if (text != null) node.textContent = text;
   return node;
 };
+const NUM = new Intl.NumberFormat("nl-NL");
 
 /* ---------- dates ---------- */
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -59,18 +65,22 @@ function inRange(ev) {
   return start <= to && end >= from;   // any overlap with the window counts
 }
 
-const DAY_FMT = new Intl.DateTimeFormat("en-GB",
-  { weekday: "long", day: "numeric", month: "long" });
+const LONG_FMT = new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long" });
+const UNTIL_FMT = new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short" });
+const WEEKDAY = new Intl.DateTimeFormat("nl-NL", { weekday: "long" });
+const MONTH = new Intl.DateTimeFormat("nl-NL", { month: "long" });
 
-function dayLabel(key) {
+/** The pieces of the date column: "vandaag" / 18 / vrijdag / september. */
+function dayParts(key) {
   const d = asDate(key);
   const diff = Math.round((d - TODAY) / 86400000);
-  const base = d.getFullYear() === TODAY.getFullYear()
-    ? DAY_FMT.format(d)
-    : DAY_FMT.format(d) + " " + d.getFullYear();
-  if (diff === 0) return { text: "Today · " + base, today: true };
-  if (diff === 1) return { text: "Tomorrow · " + base, today: false };
-  return { text: base, today: false };
+  const month = MONTH.format(d) + (d.getFullYear() === TODAY.getFullYear() ? "" : " " + d.getFullYear());
+  return {
+    rel: diff === 0 ? "vandaag" : diff === 1 ? "morgen" : null,
+    num: String(d.getDate()),
+    wd: WEEKDAY.format(d),
+    mo: month,
+  };
 }
 
 /* ---------- filtering ---------- */
@@ -79,7 +89,10 @@ function matches(ev) {
   if (state.cats.size && !ev.categories.some((c) => state.cats.has(c))) return false;
   if (!inRange(ev)) return false;
   if (state.q) {
-    const hay = [ev.title, ev.venue, ev.city, ev.summary, ...ev.categories]
+    // Dutch labels in the haystack too, so "theater" or "markt" finds what the
+    // data files under theatre and market.
+    const hay = [ev.title, ev.venue, ev.city, ev.summary, ...ev.categories,
+                 ...ev.categories.map(catPlural), ...ev.categories.map(catSingular)]
       .filter(Boolean).join(" ").toLowerCase();
     if (!state.q.split(/\s+/).every((t) => hay.includes(t))) return false;
   }
@@ -95,7 +108,9 @@ function matches(ev) {
    replaceState rather than pushState: every keystroke in the search box is a
    state change, and pushing those would make the back button walk out of the
    query one letter at a time instead of leaving the page. Defaults are left
-   out, so an untouched page keeps a clean URL. */
+   out, so an untouched page keeps a clean URL. The parameter names and values
+   stay English (they are the data's keys), so links shared before the page
+   went Dutch keep working. */
 const URL_RANGES = new Set(["today", "weekend", "7", "30", "all"]);
 // The search box's text as typed. state.q is the lowercased form matches() uses,
 // but a link reading ?q=Jeff+Buckley is friendlier than ?q=jeff+buckley, and the
@@ -117,7 +132,7 @@ function readUrlState() {
 
   (p.get("cat") || "").split(",").forEach((c) => {
     const key = c.trim().toLowerCase();
-    if (CATEGORY_LABEL[key]) state.cats.add(key);
+    if (CATEGORY[key]) state.cats.add(key);
   });
 
   // A link naming a day that has already passed is stale rather than wrong, and
@@ -136,8 +151,8 @@ function writeUrlState() {
   const p = new URLSearchParams();
   if (state.q) p.set("q", qRaw || state.q);
   if (state.city !== "all") p.set("city", state.city);
-  // Sorted, so the same set of pills always produces the same link whatever
-  // order they were clicked in.
+  // Sorted, so the same set of categories always produces the same link
+  // whatever order they were ticked in.
   if (state.cats.size) p.set("cat", [...state.cats].sort().join(","));
   if (state.range === "date") p.set("date", state.date);
   else if (state.range !== "all") p.set("when", state.range);
@@ -154,27 +169,26 @@ function writeUrlState() {
 
 /** What the "when" control currently says, in words. */
 function whenLabel() {
-  if (state.range === "date") return DAY_FMT.format(asDate(state.date));
+  if (state.range === "date") return LONG_FMT.format(asDate(state.date));
   const b = $(`#when button[data-range="${state.range}"]`);
-  return b && state.range !== "all" ? b.textContent : null;
+  return b && state.range !== "all" ? b.textContent.toLowerCase() : null;
 }
 
-/* The tally doubles as the collapsed bar's readout: with the rows hidden it is
-   the only thing telling you which filters are still on. */
+/* The tally doubles as the collapsed bar's readout: with the controls hidden
+   it is the only thing telling you which filters are still on. */
 function writeTally(n) {
   const tally = $("#tally");
   tally.replaceChildren();
   if (!DATA.events.length) return;
 
-  tally.append(document.createTextNode(
-    `${n} event${n === 1 ? "" : "s"} of ${DATA.events.length}`));
+  tally.append(document.createTextNode(`${NUM.format(n)} van ${NUM.format(DATA.events.length)}`));
 
   const active = [];
   if (state.city !== "all") active.push(state.city);
   const when = whenLabel();
   if (when) active.push(when);
-  if (state.cats.size) active.push([...state.cats].map((c) => CATEGORY_LABEL[c]).join(", "));
-  if (state.q) active.push(`"${state.q}"`);
+  if (state.cats.size) active.push([...state.cats].map((c) => catPlural(c).toLowerCase()).join(", "));
+  if (state.q) active.push(`"${qRaw || state.q}"`);
   if (!active.length) return;
 
   tally.append(document.createTextNode(" · "));
@@ -182,48 +196,83 @@ function writeTally(n) {
 }
 
 /* ---------- rendering ---------- */
-function card(ev) {
-  const a = el("a", "card");
+function row(ev) {
+  const a = el("a", "event");
   a.href = ev.url || "#";
   if (ev.url) { a.target = "_blank"; a.rel = "noopener noreferrer"; }
 
-  const time = ev.all_day || ev.start.length <= 10
-    ? el("div", "time allday", "all day")
-    : el("div", "time", ev.start.slice(11, 16));
-  a.append(time);
+  a.append(ev.all_day || ev.start.length <= 10
+    ? el("div", "time allday", "hele dag")
+    : el("div", "time", ev.start.slice(11, 16)));
 
   const body = el("div");
   body.append(el("h3", null, ev.title));
 
-  const meta = el("p", "meta");
-  const bits = [ev.venue, ev.city].filter(Boolean);
+  // Where, and until when for a run.
+  const where = [ev.venue, ev.city].filter(Boolean);
   if (ev.end && dayKey(ev.end) !== dayKey(ev.start)) {
-    bits.push("until " + DAY_FMT.format(asDate(ev.end)));
+    where.push("t/m " + UNTIL_FMT.format(asDate(ev.end)));
   }
-  bits.forEach((bit, i) => {
-    if (i) meta.append(el("span", "sep", "·"));
-    meta.append(document.createTextNode(bit));
-  });
-  if (bits.length) body.append(meta);
+  if (where.length) body.append(el("p", "meta", where.join(" · ")));
   if (ev.summary) body.append(el("p", "summary", ev.summary));
 
-  const chips = el("div", "chips");
-  ev.categories.forEach((c) => chips.append(el("span", "badge", CATEGORY_LABEL[c] || c)));
-  if (ev.price) chips.append(el("span", "badge price", ev.price));
-  if (ev.provisional) chips.append(el("span", "badge prov", "unconfirmed"));
-  chips.append(el("span", "badge src", ev.source_label || ev.source));
-  body.append(chips);
+  // What it is and where it came from, in one quiet line: the title is the
+  // only strong thing in a row.
+  const sub = el("p", "sub");
+  const bits = ev.categories.map(catSingular);
+  if (ev.price) bits.push(ev.price);
+  bits.push("via " + (ev.source_label || ev.source));
+  sub.append(document.createTextNode(bits.join(" · ")));
+  if (ev.provisional) {
+    sub.append(document.createTextNode(" · "));
+    sub.append(el("span", "flag", "onbevestigd"));
+  }
+  body.append(sub);
   a.append(body);
 
   if (ev.image) {
     const fig = el("figure");
     const img = el("img");
-    img.src = ev.image; img.alt = ""; img.loading = "lazy"; img.decoding = "async";
+    img.alt = ""; img.loading = "lazy"; img.decoding = "async";
+    // Fades in once it has actually arrived; until then, and if it never does,
+    // there is nothing there rather than an empty grey box.
+    img.addEventListener("load", () => img.classList.add("loaded"));
     img.addEventListener("error", () => fig.remove());
+    img.src = ev.image;
     fig.append(img);
     a.append(fig);
   }
   return a;
+}
+
+/** Doorlopend: runs that opened before this day (an exhibition, a theatre run),
+    folded into one line at the top, so the day opens with what actually
+    happens on it. */
+function runsBlock(evs) {
+  const box = el("details", "runs");
+  const sum = el("summary");
+  sum.append(el("span", "time", "doorlopend"));
+
+  const byCat = new Map();
+  evs.forEach((ev) => { const c = ev.categories[0] || "other"; byCat.set(c, (byCat.get(c) || 0) + 1); });
+  const parts = [...byCat.entries()].sort((a, b) => b[1] - a[1])
+    .map(([c, n]) => `${n} ${(n === 1 ? catSingular(c) : catPlural(c)).toLowerCase()}`);
+
+  const what = el("span", "what");
+  what.append(el("b", null, `${NUM.format(evs.length)} ${evs.length === 1 ? "uitje" : "uitjes"}`));
+  what.append(el("span", null, ": " + parts.join(", ")));
+  sum.append(what);
+  sum.append(el("span", "more", "tonen"));
+  box.addEventListener("toggle", () => {
+    sum.querySelector(".more").textContent = box.open ? "verbergen" : "tonen";
+  });
+  box.append(sum);
+  evs.forEach((ev) => box.append(row(ev)));
+  return box;
+}
+
+function resetFilters() {
+  location.search = "";   // the defaults are the bare URL, so this is all of it
 }
 
 function render() {
@@ -238,7 +287,11 @@ function render() {
   writeTally(hits.length);
 
   if (!hits.length) {
-    results.append(el("p", "empty", "Nothing matches those filters."));
+    const p = el("p", "empty", "Niets gevonden met deze filters.");
+    const b = el("button", "link", "Alle filters wissen");
+    b.addEventListener("click", resetFilters);
+    p.append(b);
+    results.append(p);
     applyBarHeight();
     return;
   }
@@ -256,11 +309,18 @@ function render() {
   const frag = document.createDocumentFragment();
   for (const key of [...byDay.keys()].sort()) {
     const group = el("section", "daygroup");
-    const { text, today } = dayLabel(key);
+    const { rel, num, wd, mo } = dayParts(key);
     const head = el("h2", "dayhead");
-    head.append(el("span", today ? "today" : null, text));
+    if (rel) head.append(el("span", "rel", rel));
+    head.append(el("span", "num", num), el("span", "wd", wd), el("span", "mo", mo));
     group.append(head);
-    byDay.get(key).forEach((ev) => group.append(card(ev)));
+
+    const list = el("div", "day-list");
+    const evs = byDay.get(key);
+    const running = evs.filter((ev) => dayKey(ev.start) < key);
+    if (running.length) list.append(runsBlock(running));
+    evs.filter((ev) => dayKey(ev.start) >= key).forEach((ev) => list.append(row(ev)));
+    group.append(list);
     frag.append(group);
   }
   results.append(frag);
@@ -268,13 +328,10 @@ function render() {
 }
 
 /* ---------- controls ---------- */
-function buildPills() {
-  const cities = el("div");
+function buildControls() {
   const cityBox = $("#cities");
-  const all = ["all", ...(DATA.cities || [])];
-  all.forEach((name) => {
-    const b = el("button", name === state.city ? "on" : null,
-                name === "all" ? "Both cities" : name);
+  ["all", ...(DATA.cities || [])].forEach((name) => {
+    const b = el("button", name === state.city ? "on" : null, name === "all" ? "Beide" : name);
     b.addEventListener("click", () => {
       state.city = name;
       [...cityBox.children].forEach((c) => c.classList.toggle("on", c === b));
@@ -282,24 +339,8 @@ function buildPills() {
     });
     cityBox.append(b);
   });
-  cities.remove();
 
-  const catBox = $("#cats");
-  const counts = DATA.counts.by_category || {};
-  Object.keys(CATEGORY_LABEL)
-    .filter((c) => counts[c])
-    .sort((a, b) => counts[b] - counts[a])
-    .forEach((c) => {
-      const b = el("button", state.cats.has(c) ? "on" : null);
-      b.append(document.createTextNode(CATEGORY_LABEL[c]));
-      b.append(el("span", "n", counts[c]));
-      b.addEventListener("click", () => {
-        state.cats.has(c) ? state.cats.delete(c) : state.cats.add(c);
-        b.classList.toggle("on", state.cats.has(c));
-        render();
-      });
-      catBox.append(b);
-    });
+  buildCategoryMenu();
 
   const dateInput = $("#date");
   const dateClear = $("#date-clear");
@@ -327,8 +368,8 @@ function buildPills() {
   dateInput.max = days.length ? days[days.length - 1] : TODAY_KEY;
 
   // A link can arrive with a preset or a single day already chosen. index.html
-  // marks "Everything" as the default, so move the highlight to match. Set
-  // after min/max above, or the picker rejects the value.
+  // marks "Alles" as the default, so move the highlight to match. Set after
+  // min/max above, or the picker rejects the value.
   if (state.range === "date") {
     dateInput.value = state.date;
     dateInput.classList.add("on");
@@ -365,16 +406,75 @@ function buildPills() {
   });
 }
 
+/* Categories: a dropdown of checkboxes, biggest first, with counts. A native
+   <details>, so it opens and closes without script; the script only closes it
+   on a click elsewhere or Escape, and keeps the summary saying what is on. */
+function buildCategoryMenu() {
+  const pick = $("#catpick");
+  const menu = $("#cats");
+  const counts = DATA.counts.by_category || {};
+
+  const summarise = () => {
+    const n = state.cats.size;
+    $("#cats-summary").textContent = n === 0 ? "Alle categorieën"
+      : n === 1 ? catPlural([...state.cats][0]) : `${n} categorieën`;
+    pick.classList.toggle("on", n > 0);
+  };
+
+  Object.keys(CATEGORY)
+    .filter((c) => counts[c])
+    .sort((a, b) => counts[b] - counts[a])
+    .forEach((c) => {
+      const label = el("label");
+      const box = el("input");
+      box.type = "checkbox";
+      box.value = c;
+      box.checked = state.cats.has(c);
+      box.addEventListener("change", () => {
+        box.checked ? state.cats.add(c) : state.cats.delete(c);
+        summarise();
+        render();
+      });
+      label.append(box, document.createTextNode(catPlural(c)), el("span", "n", NUM.format(counts[c])));
+      menu.append(label);
+    });
+
+  const foot = el("div", "foot");
+  const clear = el("button", "link", "Alles tonen");
+  clear.type = "button";
+  clear.addEventListener("click", () => {
+    state.cats.clear();
+    menu.querySelectorAll("input").forEach((i) => { i.checked = false; });
+    summarise();
+    render();
+  });
+  foot.append(clear);
+  menu.append(foot);
+
+  // Left-aligned unless that runs off the right edge; measured on each open,
+  // because where the control sits depends on how the bar wrapped.
+  pick.addEventListener("toggle", () => {
+    if (!pick.open) return;
+    menu.classList.remove("flip");
+    if (menu.getBoundingClientRect().right > document.documentElement.clientWidth - 8) menu.classList.add("flip");
+  });
+  document.addEventListener("click", (e) => { if (pick.open && !pick.contains(e.target)) pick.open = false; });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && pick.open) { pick.open = false; pick.querySelector("summary").focus(); }
+  });
+  summarise();
+}
+
 function buildSourcePanel() {
   const body = $("#sources-table tbody");
   DATA.sources.forEach((s) => {
     const tr = el("tr");
     tr.append(el("td", null, s.label));
     tr.append(el("td", null, s.adapter || "—"));
-    tr.append(el("td", "num", s.count));
-    tr.append(el("td", "num", s.kept));
+    tr.append(el("td", "num", NUM.format(s.count)));
+    tr.append(el("td", "num", NUM.format(s.kept)));
     let cls = "ok", msg = "ok";
-    if (s.error === "disabled") { cls = "off"; msg = "disabled"; }
+    if (s.error === "disabled") { cls = "off"; msg = "uit"; }
     else if (s.error) { cls = "fail"; msg = s.error; }
     tr.append(el("td", cls, msg));
     body.append(tr);
@@ -389,15 +489,15 @@ function buildSourcePanel() {
 }
 
 /* ---------- collapsing the filter bar ----------
-   On a phone the expanded bar is over half the viewport, which leaves almost no
-   room for results. Collapsing leaves just the toggle and the tally, so the
-   sticky strip costs ~40px instead of ~450px. The choice is remembered. */
+   On a phone the expanded bar is a good part of the viewport, which leaves
+   little room for results. Collapsing leaves just the toggle and the tally.
+   The choice is remembered (under the old name, so nobody's preference resets). */
 const COLLAPSE_KEY = "uitradar.filters.collapsed";
 
 function setCollapsed(on, remember) {
   $("#filters").classList.toggle("collapsed", on);
   $("#filters-toggle").setAttribute("aria-expanded", String(!on));
-  $("#filters-toggle").querySelector(".chev").textContent = on ? "\u25B8" : "\u25BE";
+  $("#filters-toggle").textContent = on ? "Filters tonen" : "Filters verbergen";
   if (remember) {
     try { localStorage.setItem(COLLAPSE_KEY, on ? "1" : "0"); } catch (e) { /* private mode */ }
   }
@@ -416,10 +516,10 @@ function initCollapse() {
 }
 
 /* ---------- sticky offset ----------
-   The day headings pin directly under the filter bar. The bar's height is not a
-   constant — it wraps to more rows as the viewport narrows, and gained a row
-   when the date picker was added — so a hardcoded offset parks the headings
-   behind it and they vanish while scrolling a long day. Measure it instead. */
+   The date column pins directly under the filter bar. The bar's height is not a
+   constant — it wraps to more rows as the viewport narrows — so a hardcoded
+   offset parks the dates behind it and they vanish while scrolling a long day.
+   Measure it instead. */
 function applyBarHeight() {
   const bar = $(".filters");
   if (!bar) return;
@@ -430,7 +530,7 @@ function applyBarHeight() {
 function trackBarHeight() {
   applyBarHeight();
   // The bar reflows for two different reasons: the viewport changing how many
-  // rows the pills wrap onto, and the tally line inside it gaining or losing
+  // rows the controls wrap onto, and the tally line inside it gaining or losing
   // text. ResizeObserver covers the first; render() calls applyBarHeight for
   // the second, because the tally is written after this runs.
   if (window.ResizeObserver) new ResizeObserver(applyBarHeight).observe($(".filters"));
@@ -442,9 +542,9 @@ fetch("data/events.json", { cache: "no-store" })
   .then((r) => r.json())
   .then((data) => {
     DATA = data;
-    // Before buildPills, which paints the pills from state.
+    // Before buildControls, which paints the controls from state.
     readUrlState();
-    buildPills();
+    buildControls();
     initCollapse();
     trackBarHeight();
     buildSourcePanel();
@@ -452,10 +552,11 @@ fetch("data/events.json", { cache: "no-store" })
     const when = new Date(data.generated_at);
     const live = data.sources.filter((s) => s.kept > 0).length;
     $("#footnote").textContent =
-      `${data.counts.total} events from ${live} live source${live === 1 ? "" : "s"}, ` +
-      `${data.horizon_days}-day horizon. Built ${when.toLocaleString("en-GB")}.`;
+      `${NUM.format(data.counts.total)} uitjes uit ${live} ${live === 1 ? "bron" : "bronnen"}, ` +
+      `${data.horizon_days} dagen vooruit. Bijgewerkt ${when.toLocaleString("nl-NL",
+        { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}.`;
   })
   .catch((err) => {
     $("#results").append(el("p", "empty",
-      "Could not load data/events.json — run `python3 build.py` first. " + err));
+      "Kon data/events.json niet laden. Draai eerst python3 build.py. (" + err + ")"));
   });

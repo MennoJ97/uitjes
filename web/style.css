@@ -1,199 +1,192 @@
+/* uitjes — styles.
+   Colours and type come from the family stylesheet every mhjansen.nl site
+   shares (https://mhjansen.nl/family.css, linked first in index.html):
+   Helvetica, neutral greys, and this site's accent, Amsterdam red, through
+   data-site="uitjes" on <html>. The names below alias the old ones so the
+   rules read the same; they define no colours of their own except the
+   ok/fail/warn trio for source health and unconfirmed events. */
 :root {
-  --bg: #f7f5f1;
-  --surface: #ffffff;
-  --ink: #16181d;
-  --ink-soft: #5c6270;
-  --line: #e2ddd4;
-  --accent: #b3401f;
-  --accent-soft: #fbeee9;
-  --shadow: 0 1px 2px rgba(20, 22, 28, .06), 0 8px 24px -16px rgba(20, 22, 28, .3);
-  --radius: 10px;
+  --ink-soft: var(--muted);
+  --line: var(--rule);
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  --ok: #1D7A3E; --fail: #B42318; --warn: #8A6D1F;
   /* Height of the sticky filter bar. Measured in app.js and rewritten on every
      resize — the bar wraps to a different number of rows depending on viewport
      width, so any hardcoded value pins the day headings behind it. */
-  --bar: 210px;
+  --bar: 120px;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #131417;
-    --surface: #1b1d22;
-    --ink: #ecebe8;
-    --ink-soft: #9aa0ad;
-    --line: #2c2f37;
-    --accent: #ff7d52;
-    --accent-soft: #2e1d17;
-    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px -18px rgba(0,0,0,.9);
-  }
+  :root { --ok: #5CC98A; --fail: #F2766B; --warn: #D9BD6A; }
 }
 
 * { box-sizing: border-box; }
-html { scroll-padding-top: calc(var(--bar) + 1.5rem); }
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--ink);
-  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
-}
-.wrap { max-width: 940px; margin: 0 auto; padding: 0 20px; }
+html { scroll-padding-top: calc(var(--bar) + 1rem); }
+body { margin: 0; font-size: 15px; line-height: 1.45; }
+a { color: inherit; }
+.wrap { max-width: 68rem; margin: 0 auto; padding: 0 20px; }
 
-/* ---- masthead ---- */
-.masthead { border-bottom: 1px solid var(--line); background: var(--surface); }
-.masthead .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 22px; }
-.masthead h1 { margin: 0; font-size: 27px; letter-spacing: -.02em; font-weight: 800; }
-.masthead h1 span { color: var(--accent); font-weight: 400; }
-.tagline { margin: 3px 0 0; color: var(--ink-soft); font-size: 13.5px; }
-/* Back up to the apex. Above the wordmark and deliberately quiet: it is for
-   someone who landed here on a shared link and wants to know what else is
-   here, not something a returning visitor needs to read past. Monospace for
-   the same reason it is monospace on vibeplanning -- it reads as a URL. */
-.masthead .up {
-  display: inline-block; margin: 0 0 5px; text-decoration: none;
-  color: var(--ink-soft); font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.masthead .up:hover { color: var(--accent); }
+/* ---- nav: the same bar as the other family sites ---- */
+.topnav { border-bottom: 1px solid var(--line); }
+.topnav .wrap { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+  padding-block: .8rem .7rem; }
+.brand { font-weight: 700; white-space: nowrap; }
+.brand a { text-decoration: none; }
+.brand .apex { color: var(--muted); font-weight: 400; }
+.brand .apex:hover { color: var(--ink); }
 
-button.ghost {
-  font: inherit; font-size: 13px; padding: 7px 14px; cursor: pointer;
-  border: 1px solid var(--line); background: transparent; color: var(--ink-soft);
-  border-radius: 100px;
-}
-button.ghost:hover { color: var(--ink); border-color: var(--ink-soft); }
+/* A text-looking button: the sources toggle, the filters toggle, "wis". */
+button.link { font: inherit; background: none; border: 0; padding: 0 0 .15rem; cursor: pointer;
+  color: var(--muted); border-bottom: 2px solid transparent; }
+button.link:hover { color: var(--ink); }
+button.link[aria-expanded="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+/* Tight on top: this page is a list you scroll, the title should not push it down. */
+.intro { padding-block: 1rem 1rem; }
+h1 { margin: 0; font-size: clamp(2.25rem, 6vw, 3.25rem); font-weight: 700; letter-spacing: -0.035em; line-height: 1; }
+.tagline { margin: .5rem 0 0; max-width: 42rem; }
 
 /* ---- source health ---- */
 .sources-panel { background: var(--surface); border-bottom: 1px solid var(--line); }
 .sources-panel .wrap { padding-block: 18px; }
-#sources-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+#sources-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
 #sources-table th, #sources-table td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); }
-#sources-table th { color: var(--ink-soft); font-weight: 600; }
+#sources-table th { font-weight: 700; }
 #sources-table .num { text-align: right; padding-right: 18px; }
-.ok { color: #1a8a4a; } .fail { color: #c23b22; } .off { color: var(--ink-soft); }
-@media (prefers-color-scheme: dark) { .ok { color: #56d48c; } .fail { color: #ff8368; } }
+.ok { color: var(--ok); } .fail { color: var(--fail); } .off { color: var(--muted); }
 
-/* ---- filters ---- */
-.filters {
-  position: sticky; top: 0; z-index: 20;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: saturate(180%) blur(12px);
-  border-bottom: 1px solid var(--line);
-}
-.filters .wrap { padding-block: 10px; }
+/* ---- filters: one line of controls, sticky ---- */
+.filters { position: sticky; top: 0; z-index: 20; background: var(--bg);
+  border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+.filters .wrap { padding-block: .65rem .5rem; }
+.filters .row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1.4rem; }
 
-/* The strip that survives collapsing: toggle + what is currently applied. */
-.bar-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.bar-head .tally { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-button.ghost.toggle { display: inline-flex; align-items: center; gap: 6px; flex: none; }
-/* The glyph is swapped in setCollapsed() rather than rotated with a transform:
-   the chevron is a flex item of the button, so flexbox blockifies it and the
-   cascade around display/transform got fiddly for zero benefit. */
-button.ghost.toggle .chev { font-size: 10px; opacity: .75; }
+#q { flex: 1 1 13rem; min-width: 0; font: inherit; font-size: .9375rem; padding: .4rem .6rem;
+  border: 1px solid var(--line); border-radius: 2px; background: var(--surface); color: var(--ink); }
+
+/* Mutually exclusive choices: text, the chosen one underlined, as in the nav. */
+.seg { display: flex; flex-wrap: wrap; gap: .2rem .95rem; }
+.seg button { font: inherit; font-size: .875rem; background: none; border: 0; padding: .2rem 0; cursor: pointer;
+  color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; }
+.seg button:hover { color: var(--ink); }
+.seg button.on { color: var(--ink); font-weight: 700; border-bottom-color: var(--accent); }
+
+.onday { display: flex; align-items: center; gap: .4rem; font-size: .875rem; }
+.onday label { color: var(--muted); }
+.onday input[type="date"] { font: inherit; color: var(--ink); padding: .25rem .45rem;
+  border: 1px solid var(--line); border-radius: 2px; background: var(--surface); }
+.onday input[type="date"].on { border-color: var(--accent); font-weight: 700; }
+.onday button { font: inherit; font-size: 1.1rem; line-height: 1; padding: 0 .2rem; cursor: pointer;
+  background: none; border: 0; color: var(--muted); }
+.onday button:hover { color: var(--ink); }
+
+/* Categories: one dropdown instead of fourteen pills. */
+.catpick { position: relative; }
+.catpick summary { list-style: none; cursor: pointer; font-size: .875rem; white-space: nowrap;
+  padding: .3rem .6rem; border: 1px solid var(--line); border-radius: 2px; background: var(--surface); }
+.catpick summary::-webkit-details-marker { display: none; }
+.catpick summary::after { content: " \25BE"; color: var(--muted); }
+.catpick[open] summary::after { content: " \25B4"; }
+.catpick.on summary { border-color: var(--accent); font-weight: 700; }
+/* Opens left-aligned under its button; app.js flips it to right-aligned only
+   when that would run off the right edge (the control wraps to a new line at
+   some widths, so neither side is safe on its own). */
+.catmenu { position: absolute; left: 0; top: calc(100% + 4px); z-index: 30; min-width: 15rem;
+  background: var(--surface); border: 1px solid var(--line); padding: .35rem 0;
+  box-shadow: 0 10px 28px -12px rgba(0, 0, 0, .35); }
+.catmenu label { display: flex; align-items: baseline; gap: .6rem; padding: .3rem .9rem; font-size: .875rem; cursor: pointer; }
+.catmenu label:hover { background: var(--bg); }
+.catmenu.flip { left: auto; right: 0; }
+.catmenu input { accent-color: var(--accent); margin: 0; }
+.catmenu .n { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.catmenu .foot { border-top: 1px solid var(--line); margin-top: .35rem; padding: .4rem .9rem 0; font-size: .8125rem; }
+
+/* The status line under the controls; the only line left when collapsed. */
+.bar-head { display: flex; align-items: baseline; gap: .9rem; min-width: 0; margin-top: .45rem;
+  font-size: .8125rem; color: var(--muted); }
+.filters.collapsed .bar-head { margin-top: 0; }
+.bar-head .tally { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+.tally .active { color: var(--ink); font-weight: 700; }
 .filters.collapsed #filter-rows { display: none; }
-#filter-rows { padding-top: 10px; }
-.filters .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
-.filters .row:last-of-type { margin-bottom: 4px; }
 
-#q {
-  flex: 1 1 260px; min-width: 0; font: inherit; font-size: 14.5px;
-  padding: 9px 14px; border-radius: 100px;
-  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
-}
-#q:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-
-.pills { display: flex; flex-wrap: wrap; gap: 6px; }
-.pills button {
-  font: inherit; font-size: 13px; cursor: pointer;
-  padding: 6px 13px; border-radius: 100px;
-  border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
-  white-space: nowrap;
-}
-.pills button:hover { color: var(--ink); }
-.pills button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-.pills.cats button .n { opacity: .55; margin-left: 5px; font-variant-numeric: tabular-nums; }
-
-.onday { display: flex; align-items: center; gap: 6px; }
-.onday label { font-size: 13px; color: var(--ink-soft); }
-.onday input[type="date"] {
-  font: inherit; font-size: 13px; color: var(--ink);
-  padding: 5px 10px; border-radius: 100px;
-  border: 1px solid var(--line); background: var(--surface);
-}
-.onday input[type="date"]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-.onday input[type="date"].on { background: var(--accent); border-color: var(--accent); color: #fff; }
-.onday input[type="date"].on::-webkit-calendar-picker-indicator { filter: invert(1); }
-.onday button {
-  font: inherit; font-size: 15px; line-height: 1; cursor: pointer;
-  width: 24px; height: 24px; border-radius: 50%;
-  border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
-}
-.onday button:hover { color: var(--ink); border-color: var(--ink-soft); }
-
-.tally { margin: 0; font-size: 12.5px; color: var(--ink-soft); }
-.tally .active { color: var(--accent); font-weight: 600; }
-
-/* ---- results ---- */
-main { padding-block: 8px 40px; }
+/* ---- results: the date is the structure ---- */
+main { padding-block: .25rem 3rem; }
 /* Every render() ends by measuring the filter bar, which forces a synchronous
    layout of the whole list — 126ms of a 183ms render at 2156 cards. Skipping
    the layout of off-screen days brings that down to 12ms. The size is an
    estimate of a typical day; `auto` lets the browser swap in each group's real
    height once it has been rendered, so the scrollbar settles as you scroll. */
 .daygroup {
-  margin-top: 26px;
+  display: grid; grid-template-columns: 6rem minmax(0, 1fr); column-gap: 1.5rem;
+  border-top: 2px solid var(--ink); padding-top: .6rem; margin-top: 2.25rem;
   content-visibility: auto;
   contain-intrinsic-size: auto 2300px;
 }
-.dayhead {
-  position: sticky; top: var(--bar); z-index: 10;
-  margin: 0 0 10px; padding: 8px 0 7px;
-  font-size: 12.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
-  color: var(--ink-soft);
-  background: var(--bg);
-  box-shadow: 0 6px 8px -6px var(--bg);
+.daygroup:first-child { margin-top: 1.25rem; }
+/* The left column rides along while its day scrolls past, like the date down
+   the side of a printed agenda. */
+.dayhead { position: sticky; top: calc(var(--bar) + .75rem); align-self: start; margin: 0;
+  font-size: 1rem; font-weight: 400; line-height: 1.15; }
+.dayhead span { display: block; }
+.dayhead .rel { font-size: .8125rem; font-weight: 700; color: var(--accent); }
+.dayhead .num { font-size: 2.75rem; font-weight: 700; letter-spacing: -0.04em; line-height: 1;
+  font-variant-numeric: tabular-nums; }
+.dayhead .wd { font-size: .875rem; font-weight: 700; margin-top: .2rem; }
+.dayhead .mo { font-size: .875rem; color: var(--muted); }
+.day-list { min-width: 0; }
+
+.event { display: grid; grid-template-columns: 4.25rem minmax(0, 1fr) auto; gap: 1rem; align-items: start;
+  padding: .75rem 0; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none; }
+.day-list > .event:last-child { border-bottom: 0; }
+.event .time { font-weight: 700; font-variant-numeric: tabular-nums; }
+.event .time.allday { font-weight: 400; font-size: .8125rem; color: var(--muted); padding-top: .15rem; }
+.event h3 { margin: 0 0 .1rem; font-size: 1rem; font-weight: 700; line-height: 1.3;
+  text-decoration: underline 2px transparent; text-underline-offset: .2em; transition: text-decoration-color .12s; }
+.event:hover h3 { text-decoration-color: var(--accent); }
+.event .meta { margin: 0; font-size: .875rem; }
+.event .sub { margin: .1rem 0 0; font-size: .8125rem; color: var(--muted); }
+.event .summary { margin: .3rem 0 0; font-size: .875rem; color: var(--muted); }
+.flag { color: var(--warn); font-weight: 700; }
+.event figure { margin: 0; }
+/* No placeholder fill: a slow or blocked image shows nothing, not a grey box. */
+.event img { display: block; width: 96px; height: 64px; object-fit: cover; opacity: 0; transition: opacity .3s; }
+.event img.loaded { opacity: 1; }
+
+/* Doorlopend: runs already under way on this day, folded into one line at the top. */
+.runs { border-bottom: 1px solid var(--line); }
+.runs > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 4.25rem minmax(0, 1fr) auto;
+  gap: 1rem; align-items: baseline; padding: .75rem 0; }
+.runs > summary::-webkit-details-marker { display: none; }
+.runs > summary .time { font-size: .8125rem; color: var(--muted); }
+.runs > summary .what { font-size: .9375rem; }
+.runs > summary .what b { font-weight: 700; }
+.runs > summary .what span { color: var(--muted); }
+.runs > summary .more { font-size: .8125rem; color: var(--muted); white-space: nowrap; }
+.runs > summary:hover .more { color: var(--ink); }
+.runs[open] > summary { border-bottom: 1px solid var(--line); }
+.runs .event:last-child { border-bottom: 0; }
+
+.empty { padding: 3rem 0; color: var(--muted); }
+.empty button.link { margin-left: .4rem; color: var(--ink); border-bottom-color: var(--accent); }
+
+footer { padding-block: 1.5rem 3.5rem; border-top: 1px solid var(--line); margin-top: 2rem; }
+footer p { font-size: .8125rem; color: var(--muted); margin: 0 0 .4rem; }
+code { font-family: ui-monospace, Menlo, monospace; font-size: .92em; background: var(--accent-soft); padding: 1px 5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .event img, .event h3 { transition: none; }
 }
-.dayhead .today { color: var(--accent); }
 
-.card {
-  display: grid; grid-template-columns: 62px 1fr auto; gap: 14px; align-items: start;
-  padding: 13px 15px; margin-bottom: 8px;
-  background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--radius); box-shadow: var(--shadow);
-  text-decoration: none; color: inherit;
-}
-.card:hover { border-color: var(--accent); }
-.card .time {
-  font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 700;
-  color: var(--accent); padding-top: 1px;
-}
-.card .time.allday { color: var(--ink-soft); font-weight: 600; font-size: 12px; letter-spacing: .05em; }
-.card h3 { margin: 0 0 3px; font-size: 15.5px; line-height: 1.35; font-weight: 650; }
-.card .meta { margin: 0; font-size: 13px; color: var(--ink-soft); }
-.card .meta .sep { opacity: .45; padding: 0 6px; }
-.card .summary { margin: 5px 0 0; font-size: 13px; color: var(--ink-soft); }
-.card figure { margin: 0; grid-column: 3; }
-.card img { display: block; width: 84px; height: 56px; object-fit: cover; border-radius: 6px; background: var(--line); }
-
-.chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
-.badge {
-  font-size: 11px; letter-spacing: .04em; text-transform: uppercase; font-weight: 700;
-  padding: 2.5px 8px; border-radius: 100px;
-  background: var(--accent-soft); color: var(--accent);
-}
-.badge.src { background: transparent; border: 1px solid var(--line); color: var(--ink-soft); font-weight: 600; }
-.badge.prov { background: #fff3cd; color: #8a6100; }
-@media (prefers-color-scheme: dark) { .badge.prov { background: #3a2f12; color: #ffcf5c; } }
-.badge.price { background: transparent; border: 1px solid var(--line); color: var(--ink-soft); font-weight: 600; letter-spacing: 0; text-transform: none; }
-
-.empty { padding: 60px 0; text-align: center; color: var(--ink-soft); }
-
-footer { padding-block: 24px 60px; border-top: 1px solid var(--line); margin-top: 30px; }
-footer p { font-size: 12.5px; color: var(--ink-soft); margin: 0 0 6px; }
-.note { font-size: 12.5px; color: var(--ink-soft); }
-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em;
-       background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
-
-@media (max-width: 620px) {
-  .card { grid-template-columns: 54px 1fr; }
-  .card figure { display: none; }
-  .masthead .wrap { padding-block: 16px; }
+/* Phone: the date becomes a sticky line above its day instead of a column. */
+@media (max-width: 640px) {
+  .daygroup { grid-template-columns: minmax(0, 1fr); border-top-width: 1px; padding-top: 0; }
+  .dayhead { top: var(--bar); z-index: 10; display: flex; align-items: baseline; gap: .45rem;
+    padding: .55rem 0 .45rem; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .dayhead span { display: inline; }
+  .dayhead .num { font-size: 1.375rem; letter-spacing: -0.02em; }
+  .dayhead .wd, .dayhead .mo { margin: 0; }
+  .event { grid-template-columns: 3.5rem minmax(0, 1fr); gap: .75rem; }
+  .event figure { display: none; }
+  .runs > summary { grid-template-columns: 3.5rem minmax(0, 1fr); gap: .75rem; }
+  .runs > summary .more { display: none; }
 }

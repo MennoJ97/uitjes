@@ -143,12 +143,38 @@ def parse_dt(value, *, fallback_year: int | None = None) -> tuple[str | None, bo
 _RANGE_SEP = re.compile(r"\s*(?:t/m|t\.m\.|tot en met|tot|–|—|>)\s*|\s+-\s+", re.I)
 
 
+_BARE_DAY = re.compile(r"^\s*(?:[a-z]{2,9}\.?\s+)?(\d{1,2})\s*$", re.I)
+
+
+def _borrow_month(head: str, tail: str) -> tuple[str | None, bool]:
+    """ "5" (or "vr 5") before "9 okt [2026]": the start's month and year are
+    the end's. Without this the whole range parsed as its end date. "30 – 2 okt"
+    means 30 September, so a start that lands after the end steps back a month.
+    """
+    day = _BARE_DAY.match(head)
+    end = _NL_DATE.search(tail)
+    if not day or not end:
+        return None, False
+    start, all_day = parse_dt(f"{day.group(1)} {end.group(2)} {end.group(3) or ''}")
+    stop = parse_dt(tail)[0]
+    if start and stop and start[:10] > stop[:10]:
+        d = date.fromisoformat(start[:10])
+        prev = date(d.year - (d.month == 1), (d.month - 2) % 12 + 1, 1)
+        try:
+            start = prev.replace(day=d.day).isoformat()
+        except ValueError:
+            return None, False
+    return start, all_day
+
+
 def parse_range(text: str | None) -> tuple[str | None, str | None, bool]:
     """Split a Dutch date range into (start, end, all_day)."""
     if not text:
         return None, None, False
     parts = _RANGE_SEP.split(str(text), 1)
     start, all_day = parse_dt(parts[0])
+    if not start and len(parts) > 1:
+        start, all_day = _borrow_month(parts[0], parts[1])
     if not start:
         start, all_day = parse_dt(text)
         return start, None, all_day

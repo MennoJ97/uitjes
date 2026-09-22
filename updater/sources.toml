@@ -208,7 +208,12 @@ url = "https://www.melkweg.nl/nl/agenda/"
 base_url = "https://www.melkweg.nl"
 default_venue = "Melkweg"
 default_city = "Amsterdam"
-item_pattern = '''href="(?P<url>/nl/agenda/[^"]*?(?P<date>\d{2}-\d{2}-\d{4})/)"[^>]*>.*?<span>(?P<category>[^<]{0,30})</span>.*?<h3[^>]*>(?P<title>[^<]+)</h3>'''
+# One match per card (the card is the <a>), each field a lookahead bounded by
+# its </a>. The old sequential pattern (category span, then h3) broke on a card
+# with no type label: it took a tag span *after* the title as the category and
+# then ran into the next card for its h3 - that card's title under this card's
+# URL and date, and the next card lost (2 of 288, 2026-09-22).
+item_pattern = '''href="(?P<url>/nl/agenda/[^"]*?(?P<date>\d{2}-\d{2}-\d{4})/)"[^>]*>(?=(?:(?!</a>).)*?<h3[^>]*>(?P<title>[^<]+)</h3>)(?:(?=(?:(?!</a>).)*?type-item[^>]*><span>(?P<category>[^<]{0,30})</span>))?'''
 
 [source.category_map]
 club = "club"
@@ -302,7 +307,13 @@ pages = [1,2,3,4,5,6,7,8,9,10]
 base_url = "https://stadsschouwburg-utrecht.nl"
 default_city = "Utrecht"
 fallback_categories = ["theatre"]
-item_pattern = '<a class="covering-link remove-underline" href="(?P<url>/agenda/[^"]+)"[^>]*>\s*(?P<title>[^<]+?)\s*</a>.*?<time datetime="(?P<date>[^"]+)".*?<span class="tag ?">\s*(?P<category>[^<]+?)\s*</span>\s*<p class="location[^"]*">(?P<venue>[^<]*)</p>'
+# One match per card, each field after the title a lookahead that stops at the
+# next card (paging-container) or the list's </ul>. The old pattern needed a
+# <span class="tag"> directly before the location, so a card whose last tag is
+# a festival *link* (<a class="tag">) ran on into the next card: that card's
+# category and venue, and the card itself dropped - 14 of 60 on 2026-09-22.
+# Multi-tag cards now take their first tag, not their last.
+item_pattern = '''<a class="covering-link remove-underline" href="(?P<url>/agenda/[^"]+)"[^>]*>\s*(?P<title>[^<]+?)\s*</a>(?=(?:(?!paging-container|</ul>).)*?<time datetime="(?P<date>[^"]+)")(?:(?=(?:(?!paging-container|</ul>).)*?<span class="tag ?">\s*(?P<category>[^<]+?)\s*</span>))?(?:(?=(?:(?!paging-container|</ul>).)*?<p class="location[^"]*">(?P<venue>[^<]*)</p>))?'''
 
 [source.category_map]
 toneel = "theatre"
@@ -722,7 +733,14 @@ base_url = "https://www.uitagendautrecht.nl"
 # That is what lets the fuzzy pass dedupe this source against itself.
 aggregator = true
 default_city = "Utrecht"
-item_pattern = '''href="(?P<url>https://www\.uitagendautrecht\.nl/evenement/[^"]+)".*?<img src="(?P<image>[^"]+)".*?<th>Datum</th>\s*<th>(?P<date>[^<]+)</th>(?:\s*</tr>\s*<tr>\s*<td>Tijd</td>\s*<td>\s*(?P<time>\d{1,2}:\d{2}))?.*?<div class="post-title">(?P<title>[^<]+)</div>.*?<span>(?P<venue>[^<]+)</span>.*?<span class="genre-label"><i[^>]*></i>\s*(?P<category>[^<]+)</span>'''
+# One match per card, each field a lookahead bounded by the card's </a>, so the
+# order of fields inside a card does not matter and a missing one cannot be
+# borrowed from the next card. The old sequential pattern (image, date, title,
+# venue, genre) broke when the main list put genres before the title and the
+# date after it: every row took its URL and date from one card and its title
+# and venue from the next (found 2026-09-22). Cards with no date at all (the
+# "diverse tijden" exhibitions in the Uitgelicht slider) are skipped.
+item_pattern = '''<a href="(?P<url>https://www\.uitagendautrecht\.nl/evenement/[^"]+)" class="event-overview--item">(?=(?:(?!</a>).)*?<div class="post-title">(?P<title>[^<]+)</div>)(?=(?:(?!</a>).)*?<th>Datum</th>\s*<th>(?P<date>[^<]+)</th>)(?:(?=(?:(?!</a>).)*?<td>Tijd</td>\s*<td>\s*(?P<time>\d{1,2}:\d{2})))?(?:(?=(?:(?!</a>).)*?<img src="(?P<image>[^"]+)"))?(?:(?=(?:(?!</a>).)*?class="post-location">(?:(?!</a>).)*?<span>(?P<venue>[^<]+)</span>))?(?:(?=(?:(?!</a>).)*?<span class="genre-label"><i[^>]*></i>\s*(?P<category>[^<]+)</span>))?'''
 
 [source.category_map]
 festivals = "festival"

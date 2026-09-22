@@ -137,8 +137,10 @@ def parse_dt(value, *, fallback_year: int | None = None) -> tuple[str | None, bo
     return None, False
 
 
-# "vr 11 sep t/m zo 13 sep", "5 – 9 okt", "1 sep tot 3 okt"
-_RANGE_SEP = re.compile(r"\s*(?:t/m|t\.m\.|tot en met|tot|–|—|>)\s*", re.I)
+# "vr 11 sep t/m zo 13 sep", "5 – 9 okt", "1 sep tot 3 okt", "vr 2 okt - za 3 okt".
+# A plain hyphen only counts with space on both sides: bare, it is the inside
+# of "2026-10-02" and "4-10-2026".
+_RANGE_SEP = re.compile(r"\s*(?:t/m|t\.m\.|tot en met|tot|–|—|>)\s*|\s+-\s+", re.I)
 
 
 def parse_range(text: str | None) -> tuple[str | None, str | None, bool]:
@@ -235,7 +237,9 @@ def classify(*texts: str | None, mapping: dict[str, str] | None = None,
     """Map source-native labels through `mapping`, else infer from free text."""
     out: list[str] = []
     for label in given or []:
-        key = (label or "").strip().lower()
+        # Regex-scraped labels arrive raw: "Musea &amp; exposities" would miss
+        # the "musea & exposities" key and fall through to keyword guessing.
+        key = html.unescape(label or "").strip().lower()
         mapped = (mapping or {}).get(key)
         if mapped:
             out.extend(m.strip() for m in mapped.split(","))

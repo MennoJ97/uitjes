@@ -59,9 +59,12 @@ function rangeWindow() {
 
 function inRange(ev) {
   const [from, to] = rangeWindow();
-  if (!to) return true;
   const start = asDate(ev.start);
   const end = ev.end ? asDate(ev.end) : start;
+  // "Alles" has no end but still starts today. Without that lower bound, a
+  // stale events.json (the builder refusing to publish, say) turns every
+  // concert of the last few days into a "doorlopend" run.
+  if (!to) return end >= from;
   return start <= to && end >= from;   // any overlap with the window counts
 }
 
@@ -465,7 +468,30 @@ function buildCategoryMenu() {
   summarise();
 }
 
+/** The builder's last run, when it was refused. The events (and `sources`) are
+    still the last build that did publish, so on its own this table would go
+    on saying "ok" about a source that has been failing for days. */
+function refusedAttempt() {
+  const la = DATA.last_attempt;
+  return la && la.published === false ? la : null;
+}
+
+const STAMP = { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" };
+
 function buildSourcePanel() {
+  const refused = refusedAttempt();
+  const toggle = $("#sources-toggle");
+
+  if (refused) {
+    toggle.classList.add("fail");
+    const note = el("p", "attempt fail",
+      `Laatste poging (${new Date(refused.at).toLocaleString("nl-NL", STAMP)}) niet gepubliceerd: ` +
+      refused.problems.join("; ") +
+      `. Hieronder de laatste build die wel doorkwam, van ` +
+      `${new Date(DATA.generated_at).toLocaleString("nl-NL", STAMP)}.`);
+    $("#sources-table").before(note);
+  }
+
   const body = $("#sources-table tbody");
   DATA.sources.forEach((s) => {
     const tr = el("tr");
@@ -476,11 +502,15 @@ function buildSourcePanel() {
     let cls = "ok", msg = "ok";
     if (s.error === "disabled") { cls = "off"; msg = "uit"; }
     else if (s.error) { cls = "fail"; msg = s.error; }
+    // Where the refused run saw it differently, that is the news.
+    const now = refused && refused.sources[s.id];
+    if (now && now.error && now.error !== "disabled") {
+      cls = "fail"; msg = `nu ${NUM.format(now.kept)}: ${now.error}`;
+    }
     tr.append(el("td", cls, msg));
     body.append(tr);
   });
 
-  const toggle = $("#sources-toggle");
   toggle.addEventListener("click", () => {
     const panel = $("#sources-panel");
     panel.hidden = !panel.hidden;
@@ -553,8 +583,8 @@ fetch("data/events.json", { cache: "no-store" })
     const live = data.sources.filter((s) => s.kept > 0).length;
     $("#footnote").textContent =
       `${NUM.format(data.counts.total)} uitjes uit ${live} ${live === 1 ? "bron" : "bronnen"}, ` +
-      `${data.horizon_days} dagen vooruit. Bijgewerkt ${when.toLocaleString("nl-NL",
-        { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}.`;
+      `${data.horizon_days} dagen vooruit. Bijgewerkt ${when.toLocaleString("nl-NL", STAMP)}.` +
+      (refusedAttempt() ? " Nieuwere builds zijn tegengehouden, zie Bronnen." : "");
   })
   .catch((err) => {
     $("#results").append(el("p", "empty",

@@ -53,6 +53,8 @@ h1 { margin: 0; font-size: clamp(2.25rem, 6vw, 3.25rem); font-weight: 700; lette
 #sources-table th { font-weight: 700; }
 #sources-table .num { text-align: right; padding-right: 18px; }
 .ok { color: var(--ok); } .fail { color: var(--fail); } .off { color: var(--muted); }
+button.link.fail, button.link.fail:hover { color: var(--fail); }
+.sources-panel .attempt { margin: 0 0 12px; font-size: 13px; }
 
 /* ---- filters: one line of controls, sticky ---- */
 .filters { position: sticky; top: 0; z-index: 20; background: var(--bg);

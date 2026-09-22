@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import http.cookiejar
 import json
 import os
 import time
@@ -56,6 +57,12 @@ class Http:
         self._host_failures: dict[str, int] = {}
         self.retried = 0
         self._last_call = 0.0
+        # Cookies, for the length of one run. CultureSuite sites (Kleine Komedie
+        # since 2026-09-18) bounce a cookieless request to /csq/, which sets a
+        # cookie and redirects back; without a jar that is a redirect loop that
+        # urllib reports as "HTTP 307", and the source drops to zero.
+        self._opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         os.makedirs(cache_dir, exist_ok=True)
 
     def _path(self, url: str, headers: dict, data: bytes | None = None) -> str:
@@ -129,7 +136,7 @@ class Http:
                 self.retried += 1
             self._throttle()
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                with self._opener.open(req, timeout=self.timeout) as resp:
                     self._host_failures[host] = 0
                     return resp.read(), (resp.headers.get("Content-Encoding") or "").lower()
             except urllib.error.HTTPError as exc:

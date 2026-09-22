@@ -33,6 +33,30 @@ def write_json(dataset: dict, path: str) -> None:
     os.replace(tmp_path, path)
 
 
+def record_refusal(out_path: str, dataset: dict, problems: list[str]) -> None:
+    """Stamp a refused build onto the live file, leaving its events alone.
+
+    The page's Bronnen panel reads `sources` from the published file, so after a
+    refusal it went on showing the last good build: Kleine Komedie read "ok" for
+    four days (2026-09-18..22) while every run was rejected over it. Only
+    `last_attempt` changes here - `sources` stays the published build's, because
+    guard() compares the next run against it.
+    """
+    try:
+        with open(out_path, encoding="utf-8") as fh:
+            live = json.load(fh)
+    except (OSError, ValueError):
+        return
+    live["last_attempt"] = {
+        "at": dataset["generated_at"],
+        "published": False,
+        "problems": problems,
+        "sources": {r["id"]: {"kept": r.get("kept", 0), "error": r.get("error")}
+                    for r in dataset.get("sources", [])},
+    }
+    write_json(live, out_path)
+
+
 def guard(dataset: dict, out_path: str, cfg: dict) -> list[str]:
     """Reasons this build should not replace the one already published.
 
@@ -195,8 +219,10 @@ def main() -> int:
         print(f"\n  {out_path} is unchanged and still serving the last good build.")
         print(f"  This one is at {rejected} if you want to look at it.")
         print(f"  {DIM}Re-run with --force to publish it anyway.{OFF}")
+        record_refusal(out_path, dataset, problems)
         return 1
 
+    dataset["last_attempt"] = {"at": dataset["generated_at"], "published": True}
     write_json(dataset, out_path)
     print(f"\nwrote {out_path}")
 

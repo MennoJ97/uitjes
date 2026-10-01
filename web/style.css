@@ -1,7 +1,7 @@
 /* uitjes — styles.
    Colours and type come from the family stylesheet every mhjansen.nl site
    shares (https://mhjansen.nl/family.css, linked first in index.html):
-   Helvetica, neutral greys, and this site's accent, Amsterdam red, through
+   Helvetica, neutral greys, and this site's accent, olive, through
    data-site="uitjes" on <html>. The names below alias the old ones so the
    rules read the same; they define no colours of their own except the
    ok/fail/warn trio for source health and unconfirmed events. */

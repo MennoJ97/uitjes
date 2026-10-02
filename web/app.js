@@ -93,8 +93,10 @@ function matches(ev) {
   if (!inRange(ev)) return false;
   if (state.q) {
     // Dutch labels in the haystack too, so "theater" or "markt" finds what the
-    // data files under theatre and market.
-    const hay = [ev.title, ev.venue, ev.city, ev.summary, ...ev.categories,
+    // data files under theatre and market. `search` is words the card does not
+    // show (a long description, a merged duplicate's title): "ghibli" finds
+    // Ziggo Dome's Joe Hisaishi night, whose title never says it.
+    const hay = [ev.title, ev.venue, ev.city, ev.summary, ev.search, ...ev.categories,
                  ...ev.categories.map(catPlural), ...ev.categories.map(catSingular)]
       .filter(Boolean).join(" ").toLowerCase();
     if (!state.q.split(/\s+/).every((t) => hay.includes(t))) return false;

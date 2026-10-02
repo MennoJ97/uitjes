@@ -7,7 +7,7 @@ from collections import Counter
 from datetime import date, datetime, timedelta
 
 from .adapters import REGISTRY
-from .model import Event, day_of, slugify, within_horizon
+from .model import Event, day_of, search_text, slugify, within_horizon
 
 # Words that carry no identity in a title. The canonical city names are added
 # to this at run time from filter.cities, so "Guus Meeuwis in Amsterdam" and
@@ -284,3 +284,8 @@ def _merge(keeper: Event, other: Event) -> None:
             setattr(keeper, field_name, getattr(other, field_name))
     if keeper.categories == ["other"] and other.categories != ["other"]:
         keeper.categories = other.categories
+    # The dropped title is often the more searchable one - Uit Amsterdam calls
+    # Ziggo Dome's "Bijzonder Groots" night "... met beelden van Studio Ghibli" -
+    # so its words stay findable on the keeper instead of leaving with it.
+    keeper.search = search_text(keeper.search, other.title, other.summary, other.search,
+                                exclude=(keeper.title, keeper.summary, keeper.venue))

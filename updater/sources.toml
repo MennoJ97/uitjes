@@ -453,15 +453,19 @@ evenement = "other"
 # shows have no wishlist button, so they drop out here without a filter.
 # One entry per PRODUCTION, not per performance — a show playing twelve nights
 # appears once, on its opening night, which is how the venue's own agenda reads.
-# ?page=N, 8 productions a page, 19 pages out to a year ahead; page 9 is already
-# past the 120-day horizon, so ten is generous.
+# 8 productions a page, ~19 pages out to a year ahead; page 9 is already past
+# the 120-day horizon, so ten is generous. The pager is per page PART: the
+# agenda block is part 54 and reads `p54_page`. Plain `?page=N` was ignored
+# from 2026-09-29 - every page served page 1, 80 raw rows deduped to 8, and
+# the publish guard held the whole site back for three days. If the count
+# collapses to one page's worth again, check the "next" link's href.
 # ---------------------------------------------------------------------------
 [[source]]
 id = "kleine_komedie"
 label = "De Kleine Komedie"
 adapter = "regex_cards"
 enabled = true
-url = "https://www.dekleinekomedie.nl/agenda?page={page}"
+url = "https://www.dekleinekomedie.nl/agenda?page={page}&p54_page={page}"
 pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 base_url = "https://www.dekleinekomedie.nl"
 default_venue = "De Kleine Komedie"

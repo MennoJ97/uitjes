@@ -8,7 +8,7 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 
-from ..model import Event, classify, parse_dt
+from ..model import Event, classify, parse_dt, to_local
 
 NS = {"atom": "http://www.w3.org/2005/Atom"}
 
@@ -34,7 +34,9 @@ def fetch(cfg: dict, http) -> list[Event]:
             raw = _text(item, "pubDate") or _text(item, "atom:updated")
             if raw:
                 try:
-                    start = parsedate_to_datetime(raw).replace(tzinfo=None).isoformat(
+                    # pubDate carries its zone ("+0000", "GMT"); convert, not
+                    # just strip it, or a UTC feed reads two hours early.
+                    start = to_local(parsedate_to_datetime(raw)).isoformat(
                         timespec="minutes")
                 except (TypeError, ValueError):
                     start = parse_dt(raw)[0]

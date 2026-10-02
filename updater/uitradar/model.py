@@ -7,6 +7,7 @@ import re
 import unicodedata
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 # The taxonomy the front-end filters on. Everything gets mapped into this.
 CATEGORIES = [
@@ -56,12 +57,66 @@ def clean_text(value: str | None, limit: int | None = None) -> str | None:
     return text
 
 
+# Filler that would only spend search_text()'s budget: every Dutch blurb has
+# "de", "het" and "een", and no one searches for them.
+_SEARCH_STOP = frozenset("""
+    aan als bij dan dat de deze die dit door een en het hij hun ik in is je
+    kan maar met naar niet nog of om ook op over te tot uit van voor wat we
+    wel wie wij zal ze zich zij zijn zo and are but by for from has have his
+    its of on or our that the their this to was were will with you your
+""".split())
+_SEARCH_WORD = re.compile(r"[^\W_]+(?:['’-][^\W_]+)*")
+
+
+def search_text(*texts: str | None, exclude: tuple = (), limit: int = 400) -> str | None:
+    """Distinct lowercase words from `texts`, for the page to match but never show.
+
+    For text that names what an event IS without being in its title or
+    summary: Ziggo Dome's Joe Hisaishi concert is titled "... filmmuziek -
+    Bijzonder Groots", and "Studio Ghibli" appears only in the long description,
+    so a search for ghibli could not find it. Words already in `exclude` (the
+    title and summary, which the page searches anyway) and filler are dropped
+    and the rest kept in order of first appearance, so `limit` keeps the most
+    leading words rather than a random sample.
+    """
+    seen = {w.lower() for t in exclude for w in _SEARCH_WORD.findall(clean_text(t) or "")}
+    words: list[str] = []
+    size = 0
+    for text in texts:
+        for word in _SEARCH_WORD.findall(clean_text(text) or ""):
+            key = word.lower()
+            if len(key) < 3 or key in seen or key in _SEARCH_STOP or key.isdigit():
+                continue
+            if size + len(key) + 1 > limit:
+                return " ".join(words) or None
+            seen.add(key)
+            words.append(key)
+            size += len(key) + 1
+    return " ".join(words) or None
+
+
 def slugify(value: str) -> str:
     value = unicodedata.normalize("NFKD", value or "").encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
 
 
 # --- date parsing -----------------------------------------------------------
+
+# Every venue on the site is Dutch, so this is the wall clock every start time
+# is shown in. Named here rather than taken from the process: astimezone() with
+# no argument converts to whatever TZ the container happens to run with, and
+# Concertgebouw and TivoliVredenburg (both UTC "...Z") came out right only
+# because compose sets TZ=Europe/Amsterdam. A local run on a UTC box, or a
+# compose edit that dropped the variable, would have moved them two hours.
+LOCAL_TZ = ZoneInfo("Europe/Amsterdam")
+
+
+def to_local(dt: datetime) -> datetime:
+    """An aware datetime as naive Amsterdam wall-clock time; naive passes through."""
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(LOCAL_TZ).replace(tzinfo=None)
+
 
 _MONTHS_NL = {
     "jan": 1, "feb": 2, "mrt": 3, "maa": 3, "apr": 4, "mei": 5, "jun": 6, "jul": 7,
@@ -79,7 +134,8 @@ def parse_dt(value, *, fallback_year: int | None = None) -> tuple[str | None, bo
     if value is None:
         return None, False
     if isinstance(value, (int, float)):
-        return datetime.fromtimestamp(value).isoformat(timespec="minutes"), False
+        return datetime.fromtimestamp(value, LOCAL_TZ).replace(tzinfo=None).isoformat(
+            timespec="minutes"), False
 
     text = str(value).strip()
     if not text:
@@ -88,9 +144,7 @@ def parse_dt(value, *, fallback_year: int | None = None) -> tuple[str | None, bo
     iso = text.replace("Z", "+00:00")
     for candidate in (iso, iso.replace(" ", "T")):
         try:
-            dt = datetime.fromisoformat(candidate)
-            if dt.tzinfo is not None:
-                dt = dt.astimezone().replace(tzinfo=None)
+            dt = to_local(datetime.fromisoformat(candidate))
             all_day = len(text) <= 10 or (dt.hour == 0 and dt.minute == 0 and "T" not in candidate)
             return dt.isoformat(timespec="minutes"), all_day
         except ValueError:
@@ -201,6 +255,9 @@ class Event:
     image: str | None = None
     summary: str | None = None
     price: str | None = None
+    # Extra words the page's search matches against but never displays; see
+    # search_text(). Left out of the JSON when empty, which is most events.
+    search: str | None = None
     # True for hand-entered recurrences whose exact dates were never confirmed
     # against the organiser — the UI badges these so they aren't read as fact.
     provisional: bool = False
@@ -220,6 +277,7 @@ class Event:
         self.venue = clean_text(self.venue, 80)
         self.city = clean_text(self.city, 60)
         self.price = clean_text(self.price, 40)
+        self.search = search_text(self.search, exclude=(self.title, self.summary, self.venue))
         if not self.categories:
             self.categories = ["other"]
         self.categories = [c for c in dict.fromkeys(self.categories) if c in CATEGORIES]
@@ -229,7 +287,10 @@ class Event:
         return self
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        out = asdict(self)
+        if not out["search"]:
+            del out["search"]
+        return out
 
 
 def dedupe_key(ev: Event) -> str:

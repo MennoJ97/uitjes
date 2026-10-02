@@ -200,7 +200,8 @@ def main() -> int:
     if merges:
         print(f"\n{YEL}{len(merges)} fuzzy title merges{OFF}")
         for row in merges:
-            print(f"  {DIM}{row['day']}{OFF} +{row['extra']}  "
+            how = "" if row.get("rule", "title") == "title" else f"[{row['rule']}] "
+            print(f"  {DIM}{row['day']}{OFF} {how}+{row['extra']}  "
                   f"{row['kept']} {DIM}({row['kept_source']}){OFF}"
                   f"  <-  {row['dropped']} {DIM}({row['dropped_source']}){OFF}")
     # Compare against what is already published before replacing it. A source

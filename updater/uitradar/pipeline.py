@@ -17,6 +17,29 @@ FUZZY_STOPWORDS = (
     "live", "presents", "ticket", "tickets", "tour",
 )
 
+# Words two unrelated titles at one venue easily share, so they never count as
+# the shared word that anchors a venue match (see _venue_match): two different
+# acts can both have an "album release" or a "Metropole Orkest". Dates too -
+# "Acda en de Munnik 10 oktober 2026" says nothing with its last three words.
+# Festival names belong here as well: during ADE half of Melkweg's programme
+# says "ADE", and it matched annie's weekender to Dave Clarke's "30 Years of
+# ADE" in another room.
+WEAK_ANCHORS = frozenset("""
+    ade dance event events weekender
+    concert concerten show shows night nacht party release album special edition
+    world festival anniversary jubileum jaar years orkest orchestra sold out
+    uitverkocht met zijn his her feat featuring vs presenteert presenteren
+    januari februari maart april mei juni juli augustus september oktober
+    november december
+""".split())
+
+# Generic halves of a venue name. "Koninklijk Theater Carre - Theaterzaal" and
+# "Carre" are one venue; "Theater X" and "Theater Y" are not, so what has to
+# agree is the rest.
+_VENUE_FILLER = frozenset("""
+    het de the koninklijk theater theatre zaal grote kleine foyer
+""".split())
+
 
 def load_config(path: str) -> dict:
     with open(path, "rb") as fh:
@@ -223,6 +246,7 @@ def _fuzzy_pass(kept: dict[str, Event], cfg: dict, filt: dict,
     stop = {w.lower() for w in filt.get("fuzzy_stopwords") or FUZZY_STOPWORDS}
     stop |= {c.lower() for c in (filt.get("cities") or {})}
     aggregators = {s["id"] for s in cfg.get("source", []) if s.get("aggregator")}
+    single_stage = {s["id"] for s in cfg.get("source", []) if s.get("single_stage")}
 
     buckets: dict[tuple, list[Event]] = {}
     for ev in kept.values():
@@ -254,6 +278,9 @@ def _fuzzy_pass(kept: dict[str, Event], cfg: dict, filt: dict,
                     distance = len(words ^ keeper_words)
                     if best is None or distance < best:
                         best, hit = distance, (keeper, keeper_words)
+            rule = "title"
+            if hit is None and ev.source in aggregators:
+                hit, rule = _venue_match(ev, words, survivors, aggregators, single_stage)
             if hit is None:
                 survivors.append((ev, words))
                 continue
@@ -271,10 +298,61 @@ def _fuzzy_pass(kept: dict[str, Event], cfg: dict, filt: dict,
                 # "+[voorprogramma]" showing up here is a satellite event that
                 # slipped through, and the fix is a rule, not a bug report.
                 "extra": sorted(words ^ keeper_words),
+                # Which rule matched: "title" (one contains the other),
+                # "venue" or "single_stage" - see _venue_match.
+                "rule": rule,
             })
             _merge(keeper, ev)
             kept.pop(ev.uid, None)
     return merges
+
+
+def _venue_words(venue: str | None) -> set[str]:
+    return {w for w in slugify(venue or "").split("-") if w and w not in _VENUE_FILLER}
+
+
+def _same_venue(a: str | None, b: str | None) -> bool:
+    """One name's distinctive words contain the other's: "Carre" is
+    "Koninklijk Theater Carre - Theaterzaal", "Ziggo Dome" is "Ziggo Dome"."""
+    wa, wb = _venue_words(a), _venue_words(b)
+    return bool(wa and wb) and (wa <= wb or wb <= wa)
+
+
+def _venue_match(ev: Event, words: set[str], survivors: list[tuple[Event, set[str]]],
+                 aggregators: set[str], single_stage: set[str]):
+    """An aggregator record matched to a venue's own record by WHERE, not title.
+
+    The title rule needs one title inside the other, and an aggregator often
+    labels a show differently from the venue rather than just longer: Ziggo
+    Dome's "Noah Kahan - The Great Divide Tour" is Uit Amsterdam's "Noah Kahan
+    in Ziggo Dome", and neither contains the other. Pinned to one venue on one
+    day, sharing the act's name is enough - that is what stops a one-word
+    overlap ("Mike") from crossing to another stage, which _may_merge warns
+    about. Venue words, years and WEAK_ANCHORS do not count as the shared word.
+
+    `single_stage` venues (sources.toml) put on one production a night, so
+    there no shared word is needed at all: if the venue's own feed has exactly
+    one title that day, an aggregator record there that day is that show -
+    "Jan Smit in Amsterdam" is Ziggo Dome's "Muziekfeest van het Jaar", and
+    "Royal Concertgebouw Orchestra, Ivan Fischer" its "Classics Live".
+
+    Only ever an aggregator onto a venue-direct record: two venue feeds never
+    describe each other's programme. Returns ((keeper, keeper_words), rule).
+    """
+    here = [(k, kw) for k, kw in survivors
+            if k.source not in aggregators and _same_venue(k.venue, ev.venue)]
+    if not here:
+        return None, None
+    anchors = {w for w in words - _venue_words(ev.venue) - WEAK_ANCHORS if not w.isdigit()}
+    # Most shared words wins, then the closest title, as in the title rule.
+    best = max(here, key=lambda h: (len(anchors & h[1]), -len(words ^ h[1])))
+    if anchors & best[1]:
+        return best, "venue"
+    titles = {slugify(k.title) for k, _ in here}
+    if len(titles) == 1 and all(k.source in single_stage for k, _ in here):
+        # Matinee and evening of one title: the earliest is as good as any.
+        return min(here, key=lambda h: h[0].start), "single_stage"
+    return None, None
 
 
 def _merge(keeper: Event, other: Event) -> None:
@@ -287,5 +365,8 @@ def _merge(keeper: Event, other: Event) -> None:
     # The dropped title is often the more searchable one - Uit Amsterdam calls
     # Ziggo Dome's "Bijzonder Groots" night "... met beelden van Studio Ghibli" -
     # so its words stay findable on the keeper instead of leaving with it.
-    keeper.search = search_text(keeper.search, other.title, other.summary, other.search,
+    # Its title goes first: search_text keeps leading words, and a long venue
+    # description ahead of it would spend the budget and cut exactly the
+    # alternative name the merge was meant to keep.
+    keeper.search = search_text(other.title, keeper.search, other.summary, other.search,
                                 exclude=(keeper.title, keeper.summary, keeper.venue))

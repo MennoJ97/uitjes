@@ -368,6 +368,10 @@ page_size = 50
 max_pages = 20
 default_venue = "Ziggo Dome"
 default_city = "Amsterdam"
+# One arena, one production a night: an aggregator's listing at Ziggo Dome on a
+# day this feed has one title is that show, whatever it is called. See
+# _venue_match in pipeline.py.
+single_stage = true
 fallback_categories = ["concert"]
 # Their image URLs are Azure SAS links with a token that expired in June 2026
 # (403), and the bare blob 404s. See adapters/ziggodome.py.

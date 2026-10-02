@@ -336,6 +336,17 @@ def _venue_match(ev: Event, words: set[str], survivors: list[tuple[Event, set[st
     "Jan Smit in Amsterdam" is Ziggo Dome's "Muziekfeest van het Jaar", and
     "Royal Concertgebouw Orchestra, Ivan Fischer" its "Classics Live".
 
+    That leans on the venue's feed being complete, so it backs off when the
+    clocks disagree: a timed aggregator listing more than SINGLE_STAGE_GAP
+    from every performance is a second show the feed did not list (an
+    afternoon event before the evening concert), and folding it in would take
+    it off the site. Most aggregator listings at these venues are all-day,
+    which has no clock to disagree with.
+
+    With several performances of one title (Disney in Concert at 15:00 and
+    19:00, Freek Vonk at 10:00, 13:30 and 17:00) the listing goes onto the
+    nearest in time, so its photo and words land on the performance it named.
+
     Only ever an aggregator onto a venue-direct record: two venue feeds never
     describe each other's programme. Returns ((keeper, keeper_words), rule).
     """
@@ -344,15 +355,37 @@ def _venue_match(ev: Event, words: set[str], survivors: list[tuple[Event, set[st
     if not here:
         return None, None
     anchors = {w for w in words - _venue_words(ev.venue) - WEAK_ANCHORS if not w.isdigit()}
-    # Most shared words wins, then the closest title, as in the title rule.
-    best = max(here, key=lambda h: (len(anchors & h[1]), -len(words ^ h[1])))
+    # Most shared words wins, then the closest title, as in the title rule,
+    # then the closest performance; _gap is 0 when either side has no clock.
+    best = max(here, key=lambda h: (len(anchors & h[1]), -len(words ^ h[1]),
+                                    -_gap(ev, h[0])))
     if anchors & best[1]:
         return best, "venue"
     titles = {slugify(k.title) for k, _ in here}
     if len(titles) == 1 and all(k.source in single_stage for k, _ in here):
-        # Matinee and evening of one title: the earliest is as good as any.
-        return min(here, key=lambda h: h[0].start), "single_stage"
+        nearest = min(here, key=lambda h: (_gap(ev, h[0]), h[0].start))
+        if _gap(ev, nearest[0]) <= SINGLE_STAGE_GAP:
+            return nearest, "single_stage"
     return None, None
+
+
+# How far apart two timed listings at a single_stage venue may be and still be
+# one show. Wide enough for doors vs. curtain and an aggregator rounding to the
+# hour, narrow enough that an afternoon slot and an evening one stay apart.
+SINGLE_STAGE_GAP = 180
+
+
+def _clock(ev: Event) -> int | None:
+    """Minutes past midnight, or None for an all-day record."""
+    if ev.all_day or not ev.start or len(ev.start) < 16:
+        return None
+    return int(ev.start[11:13]) * 60 + int(ev.start[14:16])
+
+
+def _gap(a: Event, b: Event) -> int:
+    """Minutes between two records' start times; 0 when either has no clock."""
+    ca, cb = _clock(a), _clock(b)
+    return 0 if ca is None or cb is None else abs(ca - cb)
 
 
 def _merge(keeper: Event, other: Event) -> None:

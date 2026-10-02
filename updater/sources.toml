@@ -432,6 +432,8 @@ url = "https://www.johancruijffarena.nl/kalender/"
 base_url = "https://www.johancruijffarena.nl"
 default_venue = "Johan Cruijff ArenA"
 default_city = "Amsterdam"
+# One match or one concert a day, like Ziggo Dome: see single_stage there.
+single_stage = true
 midnight_means_all_day = true
 item_pattern = '<a href="(?P<url>https://www\.johancruijffarena\.nl/kalender/\d+[^"]*)" class="card (?:(?!</a>)[\s\S])*?<img class="card__image__img" src="(?P<image>[^"]+)"(?:(?!</a>)[\s\S])*?<time datetime="(?P<date>[^"]+)"(?:(?!</a>)[\s\S])*?<h3>(?P<title>[^<]+)</h3>(?:(?!</a>)[\s\S])*?<div class="card__meta">\s*<span>(?P<category>[^<]+)</span>'
 flags = "i"

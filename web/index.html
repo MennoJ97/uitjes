@@ -9,13 +9,19 @@
      people's programmes, so it should be a link you send, not a search hit.
      Paired with a Disallow-everything robots.txt. -->
 <meta name="robots" content="noindex, nofollow">
-<!-- Link preview card for WhatsApp/Signal/Slack. No og:image yet: that needs a
-     real 1200x630 raster (SVG is not unfurled), which nothing here generates. -->
+<!-- Link preview card for WhatsApp/Signal/iMessage. og.png is rendered by
+     ../landing/make-og.py (a raster: SVG is not unfurled). Never the apex card:
+     its wordmark reads mhjansen.nl, so the link would preview as the apex. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="uitjes.mhjansen.nl">
 <meta property="og:title" content="uitjes — Amsterdam en Utrecht">
 <meta property="og:description" content="Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht. Eén agenda, samengesteld uit de programma's van de zalen zelf.">
 <meta property="og:url" content="https://uitjes.mhjansen.nl/">
+<meta property="og:image" content="https://uitjes.mhjansen.nl/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="uitjes — uitagenda Amsterdam en Utrecht">
+<meta name="twitter:card" content="summary_large_image">
 <meta property="og:locale" content="nl_NL">
 <!-- family.css first: Helvetica, the shared greys, and this site's red via
      data-site="uitjes" above. style.css only lays the page out. -->

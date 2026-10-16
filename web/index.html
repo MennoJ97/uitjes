@@ -5,10 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>uitjes — Amsterdam en Utrecht</title>
 <meta name="description" content="Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht, in één agenda.">
-<!-- Public, but deliberately kept out of search results: this aggregates other
-     people's programmes, so it should be a link you send, not a search hit.
-     Paired with a Disallow-everything robots.txt. -->
-<meta name="robots" content="noindex, nofollow">
+<!-- Indexed on purpose since 2026-10-16 (noindex before); see robots.txt. -->
+<link rel="canonical" href="https://uitjes.mhjansen.nl/">
 <!-- Link preview card for WhatsApp/Signal/iMessage. og.png is rendered by
      ../landing/make-og.py (a raster: SVG is not unfurled). Never the apex card:
      its wordmark reads mhjansen.nl, so the link would preview as the apex. -->
@@ -30,6 +28,13 @@
 <link rel="stylesheet" href="https://mhjansen.nl/family.css">
 <script src="https://mhjansen.nl/family.js"></script>
 <link rel="stylesheet" href="style.css?v=591ff23c">
+<!-- The site's name and what it is, for search results (shown above the result
+     instead of the bare host). -->
+<script type="application/ld+json">
+{"@context": "https://schema.org", "@type": "WebSite", "name": "uitjes",
+ "url": "https://uitjes.mhjansen.nl/", "inLanguage": "nl",
+ "description": "Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht, in één agenda."}
+</script>
 </head>
 <body>
 

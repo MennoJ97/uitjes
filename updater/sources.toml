@@ -2,7 +2,11 @@
 #
 # Everything about where events come from lives in this file. Adding, removing,
 # reweighting or re-pointing a source is an edit here — no Python involved,
-# as long as an existing adapter fits the shape of the site.
+# as long as an existing adapter fits the shape of the site. The change shows
+# on the site after the next run of build.py (06:20, 13:20, 20:20), or at once
+# with `docker exec uitjes-updater python build.py --out /site/data/events.json`
+# (sources.toml is baked into the image, so rebuild it first). This note used
+# to sit in the page's public Bronnen panel; it moved here 2026-10-19.
 #
 #   python3 build.py --list          see the registry
 #   python3 build.py --probe <id>    see exactly what one source returns

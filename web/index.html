@@ -3,18 +3,38 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- One file, three pages: nginx serves it at /, /amsterdam and /utrecht
+     with SSI on and $uitjes_page set to all, amsterdam or utrecht (see
+     ../nginx/default.conf), and the SSI directives below pick that
+     page's title and heading and include its events. Served without SSI (a
+     plain file server) every branch shows; that is not a supported way to
+     serve it. Indexed on purpose since 2026-10-16 (noindex before); see
+     robots.txt. -->
+<!--# if expr="$uitjes_page = amsterdam" -->
+<title>uitjes in Amsterdam — concerten, theater, comedy en meer</title>
+<meta name="description" content="Concerten, theater, comedy, festivals en markten in en rond Amsterdam, in één agenda uit de programma's van de zalen zelf: Paradiso, Melkweg, Concertgebouw, Carré en meer.">
+<link rel="canonical" href="https://uitjes.mhjansen.nl/amsterdam">
+<meta property="og:title" content="uitjes in Amsterdam">
+<meta property="og:url" content="https://uitjes.mhjansen.nl/amsterdam">
+<!--# elif expr="$uitjes_page = utrecht" -->
+<title>uitjes in Utrecht — concerten, theater, comedy en meer</title>
+<meta name="description" content="Concerten, theater, comedy, festivals en markten in en rond Utrecht, in één agenda uit de programma's van de zalen zelf: TivoliVredenburg, Stadsschouwburg, Comedyhuis en meer.">
+<link rel="canonical" href="https://uitjes.mhjansen.nl/utrecht">
+<meta property="og:title" content="uitjes in Utrecht">
+<meta property="og:url" content="https://uitjes.mhjansen.nl/utrecht">
+<!--# else -->
 <title>uitjes — Amsterdam en Utrecht</title>
 <meta name="description" content="Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht, in één agenda.">
-<!-- Indexed on purpose since 2026-10-16 (noindex before); see robots.txt. -->
 <link rel="canonical" href="https://uitjes.mhjansen.nl/">
+<meta property="og:title" content="uitjes — Amsterdam en Utrecht">
+<meta property="og:url" content="https://uitjes.mhjansen.nl/">
+<!--# endif -->
 <!-- Link preview card for WhatsApp/Signal/iMessage. og.png is rendered by
      ../tools/make-og.py (a raster: SVG is not unfurled). Never the apex card:
      its wordmark reads mhjansen.nl, so the link would preview as the apex. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="uitjes.mhjansen.nl">
-<meta property="og:title" content="uitjes — Amsterdam en Utrecht">
 <meta property="og:description" content="Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht. Eén agenda, samengesteld uit de programma's van de zalen zelf.">
-<meta property="og:url" content="https://uitjes.mhjansen.nl/">
 <meta property="og:image" content="https://uitjes.mhjansen.nl/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -23,11 +43,11 @@
 <meta property="og:locale" content="nl_NL">
 <!-- family.css first: Helvetica, the shared greys, and this site's red via
      data-site="uitjes" above. style.css only lays the page out. -->
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="stylesheet" href="https://mhjansen.nl/family.css">
 <script src="https://mhjansen.nl/family.js"></script>
-<link rel="stylesheet" href="style.css?v=591ff23c">
+<link rel="stylesheet" href="/style.css?v=35398d46">
 <!-- The site's name and what it is, for search results (shown above the result
      instead of the bare host). -->
 <script type="application/ld+json">
@@ -37,6 +57,7 @@
 </script>
 </head>
 <body>
+<!--# block name="none" --><!--# endblock -->
 
 <!-- The way back up to the apex page, which lists this site alongside the
      others; the apex links here, so the link goes both ways. Same bar as
@@ -57,14 +78,26 @@
       <thead><tr><th>Bron</th><th>Adapter</th><th class="num">Opgehaald</th><th class="num">Gebruikt</th><th>Status</th></tr></thead>
       <tbody></tbody>
     </table>
-    <p class="note">Een bron toevoegen, uitzetten of omleiden: pas <code>sources.toml</code> aan en draai daarna <code>python3 build.py</code> opnieuw.</p>
   </div>
 </section>
 
 <header class="intro wrap">
+<!--# if expr="$uitjes_page = amsterdam" -->
+  <h1>uitjes in Amsterdam</h1>
+  <p class="tagline">Concerten, theater, comedy, festivals en markten in en rond Amsterdam, in één agenda
+    uit de programma's van de zalen zelf. Ook: <a href="/utrecht">Utrecht</a>,
+    of <a href="/">beide steden</a>.</p>
+<!--# elif expr="$uitjes_page = utrecht" -->
+  <h1>uitjes in Utrecht</h1>
+  <p class="tagline">Concerten, theater, comedy, festivals en markten in en rond Utrecht, in één agenda
+    uit de programma's van de zalen zelf. Ook: <a href="/amsterdam">Amsterdam</a>,
+    of <a href="/">beide steden</a>.</p>
+<!--# else -->
   <h1>uitjes</h1>
   <p class="tagline">Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht, in één agenda
-    uit de programma's van de zalen zelf.</p>
+    uit de programma's van de zalen zelf. Per stad: <a href="/amsterdam">Amsterdam</a>,
+    <a href="/utrecht">Utrecht</a>.</p>
+<!--# endif -->
 </header>
 
 <nav class="filters" id="filters" aria-label="Filters">
@@ -100,13 +133,22 @@
   </div>
 </nav>
 
-<main class="wrap" id="results" aria-live="polite"></main>
+<!-- The next few weeks as plain HTML, written by uitjes-updater
+     (uitradar/pages.py) in the same markup app.js draws. app.js replaces it
+     with the full agenda once events.json is in. -->
+<main class="wrap" id="results" aria-live="polite">
+<!--# include virtual="/data/pages/${uitjes_page}.html" stub="none" -->
+</main>
 
 <footer class="wrap">
   <p id="footnote"></p>
   <p class="note">Uitjes gemarkeerd als <span class="flag">onbevestigd</span> komen uit handmatig ingevoerde herhalingen en zijn niet gecontroleerd bij de organisator.</p>
 </footer>
 
-<script src="app.js?v=e853958d"></script>
+<!-- Event JSON-LD for the same events. Outside #results on purpose: Google
+     reads structured data from the rendered page, after app.js has emptied
+     #results. -->
+<!--# include virtual="/data/pages/${uitjes_page}.ld.html" stub="none" -->
+<script src="/app.js?v=6c5a9eb2"></script>
 </body>
 </html>

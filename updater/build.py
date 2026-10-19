@@ -6,6 +6,8 @@
   python3 build.py --only tivoli   build a subset (repeatable / comma-separated)
   python3 build.py --probe tivoli  dump what one source returns, no writing
   python3 build.py --refresh       bypass the HTTP cache
+  python3 build.py --pages-only    rewrite the static pages + sitemap from the
+                                   published events.json, fetching nothing
   python3 build.py --serve         build, then serve web/ on http://localhost:8765
 """
 from __future__ import annotations
@@ -17,6 +19,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from uitradar import pages  # noqa: E402
 from uitradar.net import Http  # noqa: E402
 from uitradar.pipeline import assemble, load_config, run_source  # noqa: E402
 
@@ -55,6 +58,23 @@ def record_refusal(out_path: str, dataset: dict, problems: list[str]) -> None:
                     for r in dataset.get("sources", [])},
     }
     write_json(live, out_path)
+
+
+def write_pages(out_path: str, cfg: dict) -> None:
+    """Rewrite the static pages and the sitemap from the PUBLISHED events.json.
+
+    Read back from disk rather than taken from this run, so a refused build
+    still moves the pages on to today: the window they show is relative to the
+    day, and the last good build's events are what the site is serving. Never
+    fails the run - without these files the page still works, through app.js.
+    """
+    try:
+        with open(out_path, encoding="utf-8") as fh:
+            published = json.load(fh)
+        for line in pages.publish(published, os.path.dirname(out_path) or ".", cfg):
+            print(f"  {DIM}pages: {line}{OFF}")
+    except Exception as exc:  # noqa: BLE001 - logged, and the site degrades to JS-only
+        print(f"{RED}pages not written{OFF}: {exc!r}")
 
 
 def guard(dataset: dict, out_path: str, cfg: dict) -> list[str]:
@@ -112,6 +132,9 @@ def main() -> int:
     ap.add_argument("--serve", action="store_true", help="serve web/ after building")
     ap.add_argument("--force", action="store_true",
                     help="publish even if the guard says this build looks broken")
+    ap.add_argument("--pages-only", action="store_true",
+                    help="rewrite the static pages and sitemap from the published "
+                         "events.json, then exit")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--out", help="where to write events.json "
                                   "(default: web/data/events.json)")
@@ -127,6 +150,10 @@ def main() -> int:
             colour = GREEN if state == "on" else DIM
             print(f"{colour}{spec['id']:22} {spec.get('adapter',''):14} "
                   f"{state:9} {spec.get('label','')}{OFF}")
+        return 0
+
+    if args.pages_only:
+        write_pages(args.out or os.path.join(ROOT, "web", "data", "events.json"), cfg)
         return 0
 
     wanted = {s.strip() for item in args.only for s in item.split(",") if s.strip()}
@@ -221,11 +248,13 @@ def main() -> int:
         print(f"  This one is at {rejected} if you want to look at it.")
         print(f"  {DIM}Re-run with --force to publish it anyway.{OFF}")
         record_refusal(out_path, dataset, problems)
+        write_pages(out_path, cfg)
         return 1
 
     dataset["last_attempt"] = {"at": dataset["generated_at"], "published": True}
     write_json(dataset, out_path)
     print(f"\nwrote {out_path}")
+    write_pages(out_path, cfg)
 
     if args.serve:
         serve(os.path.join(ROOT, "web"), args.port)

@@ -47,6 +47,8 @@ button.link[aria-expanded="true"] { color: var(--ink); border-bottom-color: var(
 .intro { padding-block: 1rem 1rem; }
 h1 { margin: 0; font-size: clamp(2.25rem, 6vw, 3.25rem); font-weight: 700; letter-spacing: -0.035em; line-height: 1; }
 .tagline { margin: .5rem 0 0; max-width: 42rem; }
+.tagline a { color: inherit; text-decoration: underline 1px; text-decoration-color: var(--accent);
+  text-underline-offset: .2em; }
 
 /* ---- source health ---- */
 .sources-panel { background: var(--surface); border-bottom: 1px solid var(--line); }
@@ -172,6 +174,9 @@ main { padding-block: .25rem 3rem; }
 .runs .event:last-child { border-bottom: 0; }
 
 .empty { padding: 3rem 0; color: var(--muted); }
+/* Last line of the agenda as the server sends it (uitjes-updater writes it, see
+   uitradar/pages.py); app.js replaces the whole list, this line included. */
+.static-note { padding: 1.5rem 0 0; margin: 0; font-size: .875rem; color: var(--muted); }
 .empty button.link { margin-left: .4rem; color: var(--ink); border-bottom-color: var(--accent); }
 
 footer { padding-block: 1.5rem 3.5rem; border-top: 1px solid var(--line); margin-top: 2rem; }

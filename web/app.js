@@ -13,6 +13,15 @@ const catPlural = (c) => (CATEGORY[c] || [c])[0];
 const catSingular = (c) => (CATEGORY[c] || [c, c])[1];
 
 const state = { q: "", city: "all", cats: new Set(), range: "all", date: null };
+
+/* /amsterdam and /utrecht are this page with one city chosen, each with its own
+   title and its own events in the HTML (nginx/default.conf). The city
+   filter and the path are one thing: a city page opens with its city chosen,
+   and choosing a city moves the address to its page. Keys are the paths, in
+   step with that nginx regex and CITY_PAGES in uitradar/pages.py. */
+const CITY_PAGES = { amsterdam: "Amsterdam", utrecht: "Utrecht" };
+const PAGE_PATHS = new Set(["/", ...Object.keys(CITY_PAGES).map((c) => "/" + c)]);
+const cityPath = (city) => (city !== "all" && CITY_PAGES[city.toLowerCase()] ? "/" + city.toLowerCase() : null);
 let DATA = { events: [], sources: [], counts: {}, generated_at: null };
 
 const $ = (sel) => document.querySelector(sel);
@@ -128,9 +137,13 @@ function readUrlState() {
   qRaw = (p.get("q") || "").trim();
   state.q = qRaw.toLowerCase();
 
+  const pageCity = CITY_PAGES[location.pathname.slice(1)];
+  if (pageCity) state.city = pageCity;
+
   // Everything below is checked against what this build actually contains, so
   // a link that outlived a renamed city or a category that no longer has any
-  // events degrades to the unfiltered page rather than to a blank one.
+  // events degrades to the unfiltered page rather than to a blank one. A
+  // ?city= from before the city pages still works, and moves to its page.
   const city = (p.get("city") || "").toLowerCase();
   const known = (DATA.cities || []).find((c) => c.toLowerCase() === city);
   if (known) state.city = known;
@@ -153,9 +166,14 @@ function readUrlState() {
 }
 
 function writeUrlState() {
+  // On the site the city is the path. Anywhere else (a local file server, say)
+  // there is only the one page, and the city stays a parameter.
+  const onSite = PAGE_PATHS.has(location.pathname);
+  const path = onSite ? cityPath(state.city) || "/" : location.pathname;
+
   const p = new URLSearchParams();
   if (state.q) p.set("q", qRaw || state.q);
-  if (state.city !== "all") p.set("city", state.city);
+  if (state.city !== "all" && !(onSite && cityPath(state.city))) p.set("city", state.city);
   // Sorted, so the same set of categories always produces the same link
   // whatever order they were ticked in.
   if (state.cats.size) p.set("cat", [...state.cats].sort().join(","));
@@ -167,8 +185,7 @@ function writeUrlState() {
   // read in a message than ?cat=comedy%2Ctheatre, so put it back.
   const qs = p.toString().replace(/%2C/g, ",");
   try {
-    history.replaceState(null, "",
-                         location.pathname + (qs ? "?" + qs : "") + location.hash);
+    history.replaceState(null, "", path + (qs ? "?" + qs : "") + location.hash);
   } catch (e) { /* file:// and sandboxed frames refuse this; filters still work */ }
 }
 
@@ -277,7 +294,10 @@ function runsBlock(evs) {
 }
 
 function resetFilters() {
-  location.search = "";   // the defaults are the bare URL, so this is all of it
+  // The defaults are the bare front page, so this is all of it. Not just
+  // clearing the query: on /amsterdam that would keep the city.
+  if (PAGE_PATHS.has(location.pathname)) location.href = "/";
+  else location.search = "";
 }
 
 function render() {
@@ -589,6 +609,8 @@ fetch("data/events.json", { cache: "no-store" })
       (refusedAttempt() ? " Nieuwere builds zijn tegengehouden, zie Bronnen." : "");
   })
   .catch((err) => {
-    $("#results").append(el("p", "empty",
-      "Kon data/events.json niet laden. Draai eerst python3 build.py. (" + err + ")"));
+    // Whatever the server put in the HTML stays: the next few weeks, without
+    // the filters. Say so above it rather than replacing it.
+    $("#results").prepend(el("p", "empty",
+      "De volledige agenda kon niet worden geladen, de filters werken daardoor niet. (" + err + ")"));
   });

@@ -26,9 +26,13 @@ Why the JSON-LD is lean: Google's Event rich results need one page per event
 ("Each event MUST have a unique URL (a leaf page)"), and as of the docs dated
 2026-09-08 the feature is not offered in the Netherlands or in Dutch at all.
 So the markup here is a plain, valid description of what is on the page for
-any consumer that reads it, not a bid for rich results, and it leaves out
-what would only add weight (images, descriptions) or would have to be guessed
-(street addresses: the sources give a venue and a city, nothing more).
+any consumer that reads it, not a bid for rich results. It carries what the
+sources give (image, the summary as description, the venue's own ticket page
+as offer) and leaves out what would have to be guessed (street addresses:
+the sources give a venue and a city, nothing more). Runs longer than
+MAX_RUN_DAYS and promotions are left out of the markup, though not out of the
+agenda: Google's guidelines rule out marking up non-events, promotions and
+coupons as events, and a two-month "event" is mostly one of those.
 """
 from __future__ import annotations
 
@@ -53,7 +57,7 @@ PAGES = {"all": ("/", None), **{c.lower(): (f"/{c.lower()}", c) for c in CITY_PA
 # next one would take the fragment past BUDGET bytes, so a busy week shows
 # fewer days than a quiet one, and the page stays well under a megabyte (it
 # goes out gzipped, at about a sixth of that). MIN_DAYS wins over the budget.
-BUDGET = 450_000
+BUDGET = 500_000
 MIN_DAYS, MAX_DAYS = 7, 28
 
 # Mirrors CATEGORY in app.js: what a visitor sees, singular and plural.
@@ -80,6 +84,13 @@ MONTHS = ("januari", "februari", "maart", "april", "mei", "juni", "juli", "augus
 MONTHS_SHORT = ("jan.", "feb.", "mrt.", "apr.", "mei", "jun.", "jul.", "aug.", "sep.",
                 "okt.", "nov.", "dec.")
 
+# A run longer than this is a season, an exhibition or a competition rather
+# than an event someone goes to on a date ("Spot de strik en win!", 60 days).
+MAX_RUN_DAYS = 14
+# Titles that are a promotion, not an event. Not "wedstrijd": in Dutch that is
+# also a match, which is an event.
+_PROMOTION = re.compile(r"\b(win|winnen|actie|korting|kortingscode|voucher|prijsvraag|giveaway)\b",
+                        re.I)
 _SOLD_OUT = re.compile(r"\b(sold[ -]?out|uitverkocht)\b", re.I)
 _AMOUNT = re.compile(r"(\d+)(?:[.,](\d{1,2}))?")
 
@@ -181,7 +192,9 @@ def _place(ev: dict, labels: dict, aggregators: set) -> str | None:
 def _jsonld(ev: dict, labels: dict, aggregators: set) -> dict | None:
     # Unconfirmed recurrences are not marked up as events: their dates are a
     # guess, and the markup would state them as fact.
-    if ev.get("provisional"):
+    if ev.get("provisional") or _PROMOTION.search(ev["title"]):
+        return None
+    if ev.get("end") and (_day(ev["end"]) - _day(ev["start"])).days > MAX_RUN_DAYS:
         return None
     place = _place(ev, labels, aggregators)
     if not place or place.lower() == "online" or not ev.get("city"):
@@ -199,6 +212,10 @@ def _jsonld(ev: dict, labels: dict, aggregators: set) -> dict | None:
                                     "addressLocality": ev["city"], "addressCountry": "NL"}}
     if ev.get("url"):
         item["url"] = ev["url"]
+    if (ev.get("image") or "").startswith(("https://", "http://")):
+        item["image"] = [ev["image"]]
+    if ev.get("summary"):
+        item["description"] = ev["summary"]
     # An offer only where the link is the venue's own: an aggregator's page
     # describes the event but does not sell the ticket.
     if ev.get("url") and ev.get("source") not in aggregators:

@@ -221,7 +221,17 @@ function writeTally(n) {
 function row(ev) {
   const a = el("a", "event");
   a.href = ev.url || "#";
-  if (ev.url) { a.target = "_blank"; a.rel = "noopener noreferrer"; }
+  if (ev.url) {
+    a.target = "_blank"; a.rel = "noopener noreferrer";
+    // Which events people open, as an Umami "event-open" event: the tracker
+    // reports clicks on anything carrying data-umami-event, with every
+    // data-umami-event-* attribute as a property. A new tab, so nothing waits.
+    a.dataset.umamiEvent = "event-open";
+    a.dataset.umamiEventTitle = ev.title.slice(0, 100);
+    a.dataset.umamiEventSource = ev.source_label || ev.source;
+    a.dataset.umamiEventCategory = ev.categories[0] || "other";
+    if (ev.city) a.dataset.umamiEventCity = ev.city;
+  }
 
   a.append(ev.all_day || ev.start.length <= 10
     ? el("div", "time allday", "hele dag")
@@ -300,10 +310,36 @@ function resetFilters() {
   else location.search = "";
 }
 
+/* ---------- analytics ----------
+   What the filters were set to, as one Umami "filter" event once the visitor
+   has left them alone for 1.5s, so typing "jazz" is one event and not four.
+   The tag in index.html excludes the query string from page views for the same
+   reason. The first render is skipped: the page view already covers the state
+   a page opened with. */
+let trackedFilters = null;
+let filterTimer = 0;
+function trackFilters() {
+  const props = {
+    city: state.city,
+    when: state.range,
+    cats: [...state.cats].sort().join(",") || "none",
+  };
+  if (state.q) props.q = (qRaw || state.q).slice(0, 60);
+  const key = JSON.stringify(props);
+  if (trackedFilters === null) { trackedFilters = key; return; }
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(() => {
+    if (key === trackedFilters) return;
+    trackedFilters = key;
+    if (window.umami) window.umami.track("filter", props);
+  }, 1500);
+}
+
 function render() {
   // Every control ends up here, which makes this the one place the URL has to
   // be kept in step with the filters.
   writeUrlState();
+  trackFilters();
 
   const hits = DATA.events.filter(matches);
   const results = $("#results");

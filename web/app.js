@@ -318,6 +318,29 @@ function resetFilters() {
    a page opened with. */
 let trackedFilters = null;
 let filterTimer = 0;
+
+/* Campaign links. data-exclude-search strips the whole query from page views,
+   utm_* included, and writeUrlState() drops anything it does not know on the
+   first render anyway -- before the deferred tracker has sent a thing. So the
+   utm_* parameters are read here, while app.js runs and the URL is still the
+   one that was clicked, and put back on the FIRST page view only, through the
+   tag's data-before-send hook (called with every payload; returns what to send).
+   A later view or a reshared link carries no campaign. */
+const LANDING_UTM = (() => {
+  const p = new URLSearchParams();
+  new URLSearchParams(location.search).forEach((v, k) => { if (/^utm_[a-z]+$/.test(k)) p.set(k, v.slice(0, 100)); });
+  return p.toString();
+})();
+let utmSent = !LANDING_UTM;
+window.uitjesBeforeSend = (type, payload) => {
+  if (!utmSent && payload && !payload.name && payload.url) {
+    utmSent = true;
+    const u = new URL(payload.url, location.href);
+    u.search = LANDING_UTM;
+    payload.url = /^https?:/.test(payload.url) ? u.toString() : u.pathname + u.search + u.hash;
+  }
+  return payload;
+};
 function trackFilters() {
   const props = {
     city: state.city,

@@ -51,9 +51,12 @@
 <!-- Umami, served from this host's own /_u/ (routed by the reverse proxy): no
      cookies, no stored IP. data-exclude-search because app.js rewrites the query
      on every keystroke; the filters are reported as a "filter" event instead.
-     data-domains keeps a local copy of the page from reporting. -->
+     data-domains keeps a local copy of the page from reporting. data-before-send
+     puts utm_* back on the first page view (app.js); data-performance reports
+     LCP/INP/CLS. -->
 <script defer src="/_u/script.js" data-website-id="4ccc5a99-82ff-474c-8aa7-79fdd554d14a"
-        data-domains="uitjes.mhjansen.nl" data-exclude-search="true" data-do-not-track="true"></script>
+        data-domains="uitjes.mhjansen.nl" data-exclude-search="true" data-do-not-track="true"
+        data-before-send="uitjesBeforeSend" data-performance="true"></script>
 <!-- The site's name and what it is, for search results (shown above the result
      instead of the bare host). -->
 <script type="application/ld+json">
@@ -155,6 +158,6 @@
      reads structured data from the rendered page, after app.js has emptied
      #results. -->
 <!--# include virtual="/data/pages/${uitjes_page}.ld.html" stub="none" -->
-<script src="/app.js?v=3c4364b6"></script>
+<script src="/app.js?v=d7133f0a"></script>
 </body>
 </html>

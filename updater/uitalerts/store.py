@@ -29,7 +29,10 @@ CREATE TABLE IF NOT EXISTS subscriber (
   confirmed_at TEXT,
   last_confirm_mail TEXT,
   confirm_mail_day TEXT,
-  confirm_mails INTEGER NOT NULL DEFAULT 0
+  confirm_mails INTEGER NOT NULL DEFAULT 0,
+  -- nl | en: the language of the page they last signed up on, and of every
+  -- mail they get. Added 2026-10-21; see _migrate for databases from before.
+  lang TEXT NOT NULL DEFAULT 'nl'
 );
 CREATE TABLE IF NOT EXISTS watch (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,7 +87,15 @@ class Store:
         with self.lock:
             self.db.executescript(SCHEMA)
             self.db.execute("PRAGMA journal_mode = WAL")
+            self._migrate()
         self.secret = _load_secret(os.path.join(data_dir, "secret"))
+
+    def _migrate(self) -> None:
+        """Columns added after the first deploy. CREATE TABLE IF NOT EXISTS
+        leaves an existing table as it was, so each one is added here."""
+        have = {r["name"] for r in self.db.execute("PRAGMA table_info(subscriber)")}
+        if "lang" not in have:
+            self.db.execute("ALTER TABLE subscriber ADD COLUMN lang TEXT NOT NULL DEFAULT 'nl'")
 
     # -- tokens -------------------------------------------------------------
     # Signed, not stored: <id>.<hmac>. The HMAC covers what the token is for
@@ -111,9 +122,10 @@ class Store:
         return self.token("confirm", watch["id"], watch["created_at"])
 
     # -- sign-up ------------------------------------------------------------
-    def subscribe(self, email: str, w: dict) -> tuple[sqlite3.Row | None, str]:
+    def subscribe(self, email: str, w: dict, lang: str = "nl") -> tuple[sqlite3.Row | None, str]:
         """Add an unconfirmed watch. Returns (watch, "") when a confirmation
-        mail should go out, or (None, reason) when it should not."""
+        mail should go out, or (None, reason) when it should not. The
+        subscriber's mail language becomes `lang`: the page they used last."""
         with self.lock:
             self.db.execute("BEGIN IMMEDIATE")
             try:
@@ -121,10 +133,14 @@ class Store:
                                       (email,)).fetchone()
                 if sub is None:
                     sub_id = self.db.execute(
-                        "INSERT INTO subscriber (email, created_at) VALUES (?, ?)",
-                        (email, now())).lastrowid
-                    sub = self.db.execute("SELECT * FROM subscriber WHERE id = ?",
-                                          (sub_id,)).fetchone()
+                        "INSERT INTO subscriber (email, created_at, lang) VALUES (?, ?, ?)",
+                        (email, now(), lang)).lastrowid
+                elif sub["lang"] != lang:
+                    sub_id = sub["id"]
+                    self.db.execute("UPDATE subscriber SET lang = ? WHERE id = ?", (lang, sub_id))
+                else:
+                    sub_id = sub["id"]
+                sub = self.db.execute("SELECT * FROM subscriber WHERE id = ?", (sub_id,)).fetchone()
                 # The same filter twice is one watch: re-sending its
                 # confirmation is what a second sign-up should do, and a
                 # confirmed one only takes the new reminder setting.

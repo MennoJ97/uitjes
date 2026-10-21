@@ -88,78 +88,129 @@ class Mailer:
     # Tokens ride in the fragment: never sent to the server, so they stay out
     # of access logs, analytics and Referer headers. The page reads them and
     # POSTs; a GET never changes anything, because mail scanners follow links.
-    def link(self, action: str, token: str) -> str:
-        return f"{self.base}/meldingen#{action}={token}"
+    # The fragment keys stay Dutch on both pages; only the page differs.
+    def link(self, action: str, token: str, lang: str = "nl") -> str:
+        return f"{self.base}{PAGE[lang]}#{action}={token}"
 
     def one_click(self, token: str) -> str:
         return f"{self.base}/api/alerts/one-click?t={token}"
 
     # -- the three mails ----------------------------------------------------
-    def confirm(self, to: str, w: dict, token: str) -> None:
-        url = self.link("bevestig", token)
-        what = W.describe(w)
-        text = (f"Iemand, hopelijk jij, vroeg op {self.base} om een mail bij nieuwe uitjes voor:\n\n"
-                f"  {what}\n\nBevestig dat hier:\n{url}\n\n"
-                "Niet aangevraagd? Dan hoef je niets te doen: zonder bevestiging wordt dit adres "
-                "binnen 48 uur gewist, en je hoort niets meer van ons.\n")
+    def confirm(self, to: str, w: dict, token: str, lang: str = "nl") -> None:
+        t = TEXT[lang]
+        url = self.link("bevestig", token, lang)
+        what = W.describe(w, lang)
+        home = W.site_url(self.base, {"q": "", "city": "all", "cats": []}, lang)
+        text = (f"{t['asked'].format(site=self.base)}\n\n  {what}\n\n{t['confirm_here']}\n{url}\n\n"
+                f"{t['not_you']}\n")
         body = _page(
-            f"<p>Iemand, hopelijk jij, vroeg op <a href=\"{self.base}\">uitjes</a> om een mail bij "
-            f"nieuwe uitjes voor:</p><p style=\"font-size:17px\"><b>{_e(what)}</b></p>"
-            f"{_button(url, 'Bevestig je aanmelding')}"
-            "<p style=\"color:#666\">Niet aangevraagd? Dan hoef je niets te doen: zonder bevestiging "
-            "wordt dit adres binnen 48 uur gewist, en je hoort niets meer van ons.</p>")
-        self.send(to, "Bevestig je uitjes-melding", text, body)
+            f"<p>{t['asked'].format(site=f'<a href=\"{home}\">uitjes</a>')}</p>"
+            f"<p style=\"font-size:17px\"><b>{_e(what)}</b></p>"
+            f"{_button(url, t['confirm_button'])}"
+            f"<p style=\"color:#666\">{_e(t['not_you'])}</p>", lang)
+        self.send(to, t["confirm_subject"], text, body)
 
-    def announce(self, to: str, sections: list[tuple[dict, list[dict], int]], token: str) -> None:
+    def announce(self, to: str, sections: list[tuple[dict, list[dict], int]], token: str,
+                 lang: str = "nl") -> None:
+        t = TEXT[lang]
         total = sum(len(evs) + more for _, evs, more in sections)
-        subject = (f"Nieuw op uitjes: {sections[0][1][0]['title']}" if total == 1
-                   else f"{total} nieuwe uitjes voor je meldingen")
-        self._digest(to, subject, "Nieuw aangekondigd", sections, token)
+        subject = (t["new_one"].format(title=sections[0][1][0]["title"]) if total == 1
+                   else t["new_many"].format(n=total))
+        self._digest(to, subject, t["new_heading"], sections, token, lang)
 
-    def remind(self, to: str, sections: list[tuple[dict, list[dict], int]], token: str) -> None:
+    def remind(self, to: str, sections: list[tuple[dict, list[dict], int]], token: str,
+               lang: str = "nl") -> None:
+        t = TEXT[lang]
         first = sections[0][1][0]
         total = sum(len(evs) + more for _, evs, more in sections)
-        subject = (f"Binnenkort: {first['title']} ({W.when(first)})" if total == 1
-                   else f"Binnenkort: {total} uitjes uit je meldingen")
-        self._digest(to, subject, "Binnenkort", sections, token)
+        subject = (t["soon_one"].format(title=first["title"], when=W.when(first, lang)) if total == 1
+                   else t["soon_many"].format(n=total))
+        self._digest(to, subject, t["soon_heading"], sections, token, lang)
 
     def _digest(self, to: str, subject: str, heading: str,
-                sections: list[tuple[dict, list[dict], int]], token: str) -> None:
-        manage, leave = self.link("beheer", token), self.link("afmelden", token)
+                sections: list[tuple[dict, list[dict], int]], token: str, lang: str = "nl") -> None:
+        t = TEXT[lang]
+        manage, leave = self.link("beheer", token, lang), self.link("afmelden", token, lang)
+        home = W.site_url(self.base, {"q": "", "city": "all", "cats": []}, lang)
         text_parts, html_parts = [f"{heading}\n"], [f"<h1 style=\"font-size:20px\">{_e(heading)}</h1>"]
         for w, evs, more in sections:
-            view = W.site_url(self.base, w)
-            text_parts.append(f"\n{W.describe(w)}\n")
+            view = W.site_url(self.base, w, lang)
+            what = W.describe(w, lang)
+            text_parts.append(f"\n{what}\n")
             html_parts.append(f"<h2 style=\"font-size:15px;margin:22px 0 6px;color:{ACCENT}\">"
-                              f"{_e(W.describe(w))}</h2>")
+                              f"{_e(what)}</h2>")
             rows = []
             for ev in evs:
-                place = " · ".join(x for x in (ev.get("venue"), ev.get("city")) if x)
+                place = " \u00b7 ".join(x for x in (ev.get("venue"), ev.get("city")) if x)
                 link = ev.get("url") or view
-                text_parts.append(f"- {W.when(ev)}  {ev['title']}\n  {place}\n  {link}\n")
+                text_parts.append(f"- {W.when(ev, lang)}  {ev['title']}\n  {place}\n  {link}\n")
                 rows.append(
                     "<tr><td style=\"padding:6px 12px 6px 0;vertical-align:top;white-space:nowrap;"
-                    f"color:#555\">{_e(W.when(ev))}</td><td style=\"padding:6px 0\">"
+                    f"color:#555\">{_e(W.when(ev, lang))}</td><td style=\"padding:6px 0\">"
                     f"<a href=\"{_e(link)}\" style=\"color:#111;font-weight:bold\">{_e(ev['title'])}</a>"
                     f"<br><span style=\"color:#666\">{_e(place)}</span></td></tr>")
             html_parts.append("<table style=\"border-collapse:collapse\">" + "".join(rows) + "</table>")
+            label = t["more"].format(n=more) if more else t["view"]
             if more:
-                text_parts.append(f"  ...en nog {more} meer: {view}\n")
-                html_parts.append(f"<p><a href=\"{_e(view)}\" style=\"color:{ACCENT}\">"
-                                  f"En nog {more} meer op uitjes</a></p>")
-            else:
-                html_parts.append(f"<p><a href=\"{_e(view)}\" style=\"color:{ACCENT}\">"
-                                  "Bekijk deze selectie op uitjes</a></p>")
-        text_parts.append(f"\nJe krijgt deze mail omdat je dit op {self.base} hebt aangevraagd.\n"
-                          f"Meldingen aanpassen: {manage}\nAfmelden: {leave}\n")
+                text_parts.append(f"  {label}: {view}\n")
+            html_parts.append(f"<p><a href=\"{_e(view)}\" style=\"color:{ACCENT}\">{_e(label)}</a></p>")
+        text_parts.append(f"\n{t['why'].format(site=self.base)}\n"
+                          f"{t['manage']}: {manage}\n{t['leave']}: {leave}\n")
         html_parts.append(
             "<p style=\"color:#666;font-size:13px;margin-top:28px;border-top:1px solid #ddd;"
-            f"padding-top:12px\">Je krijgt deze mail omdat je dit op <a href=\"{self.base}\" "
-            f"style=\"color:#666\">uitjes</a> hebt aangevraagd. <a href=\"{_e(manage)}\" "
-            f"style=\"color:#666\">Meldingen aanpassen</a> · <a href=\"{_e(leave)}\" "
-            "style=\"color:#666\">Afmelden</a></p>")
-        self.send(to, subject, "".join(text_parts), _page("".join(html_parts)),
+            f"padding-top:12px\">{t['why'].format(site=f'<a href=\"{home}\" style=\"color:#666\">uitjes</a>')} "
+            f"<a href=\"{_e(manage)}\" style=\"color:#666\">{_e(t['manage'])}</a> \u00b7 "
+            f"<a href=\"{_e(leave)}\" style=\"color:#666\">{_e(t['leave'])}</a></p>")
+        self.send(to, subject, "".join(text_parts), _page("".join(html_parts), lang),
                   unsubscribe=self.one_click(token))
+
+
+# The sign-up page for each language: /meldingen is Dutch, /en/alerts English
+# (served from the same meldingen.html; see nginx/default.conf).
+PAGE = {"nl": "/meldingen", "en": "/en/alerts"}
+
+# Every string a subscriber reads, per language. {site} is either the bare URL
+# (plain text) or a link to the home page (HTML).
+TEXT = {
+    "nl": {
+        "asked": "Iemand, hopelijk jij, vroeg op {site} om een mail bij nieuwe uitjes voor:",
+        "confirm_here": "Bevestig dat hier:",
+        "confirm_button": "Bevestig je aanmelding",
+        "not_you": ("Niet aangevraagd? Dan hoef je niets te doen: zonder bevestiging wordt dit adres "
+                    "binnen 48 uur gewist, en je hoort niets meer van ons."),
+        "confirm_subject": "Bevestig je uitjes-melding",
+        "new_heading": "Nieuw aangekondigd",
+        "new_one": "Nieuw op uitjes: {title}",
+        "new_many": "{n} nieuwe uitjes voor je meldingen",
+        "soon_heading": "Binnenkort",
+        "soon_one": "Binnenkort: {title} ({when})",
+        "soon_many": "Binnenkort: {n} uitjes uit je meldingen",
+        "more": "En nog {n} meer op uitjes",
+        "view": "Bekijk deze selectie op uitjes",
+        "why": "Je krijgt deze mail omdat je dit op {site} hebt aangevraagd.",
+        "manage": "Meldingen aanpassen",
+        "leave": "Afmelden",
+    },
+    "en": {
+        "asked": "Someone, hopefully you, asked on {site} for an email when new events appear for:",
+        "confirm_here": "Confirm it here:",
+        "confirm_button": "Confirm your sign-up",
+        "not_you": ("Didn't ask for this? Then there's nothing to do: without confirmation this address "
+                    "is deleted within 48 hours, and you won't hear from us again."),
+        "confirm_subject": "Confirm your uitjes alert",
+        "new_heading": "Just announced",
+        "new_one": "New on uitjes: {title}",
+        "new_many": "{n} new events for your alerts",
+        "soon_heading": "Coming up",
+        "soon_one": "Coming up: {title} ({when})",
+        "soon_many": "Coming up: {n} events from your alerts",
+        "more": "And {n} more on uitjes",
+        "view": "See this selection on uitjes",
+        "why": "You're getting this email because you asked for it on {site}.",
+        "manage": "Manage your alerts",
+        "leave": "Unsubscribe",
+    },
+}
 
 
 def _e(value) -> str:
@@ -172,7 +223,7 @@ def _button(url: str, label: str) -> str:
             f"font-weight:bold;display:inline-block\">{_e(label)}</a></p>")
 
 
-def _page(inner: str) -> str:
-    return ("<!doctype html><html lang=\"nl\"><body style=\"margin:0;padding:24px;"
+def _page(inner: str, lang: str = "nl") -> str:
+    return (f"<!doctype html><html lang=\"{lang}\"><body style=\"margin:0;padding:24px;"
             "font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:1.45;color:#111;"
             f"background:#fff\"><div style=\"max-width:600px\">{inner}</div></body></html>")

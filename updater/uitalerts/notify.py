@@ -67,7 +67,7 @@ def announce(store, mailer, events: list[dict], today: date, log=print, track=_n
         if not sections:
             continue
         sub = store.subscriber(sub_id)
-        mailer.announce(sub["email"], sections, store.manage_token(sub))
+        mailer.announce(sub["email"], sections, store.manage_token(sub), sub["lang"])
         store.mark(marks)
         mailed += 1
         track("alert-mail", {"announce_mails": 1, "events_announced": len(marks)},
@@ -96,7 +96,7 @@ def remind(store, mailer, events: list[dict], today: date, log=print, track=_no_
         if not sections:
             continue
         sub = store.subscriber(sub_id)
-        mailer.remind(sub["email"], sections, store.manage_token(sub))
+        mailer.remind(sub["email"], sections, store.manage_token(sub), sub["lang"])
         store.mark(marks)
         mailed += 1
         track("alert-mail", {"remind_mails": 1, "events_reminded": len(marks)},

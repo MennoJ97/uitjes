@@ -29,8 +29,40 @@ PREFIX = "/api/alerts/"
 MAX_BODY = 4096
 SUBSCRIBES_PER_IP_HOUR = 6
 CONFIRM_MAILS_PER_HOUR = 40   # all addresses together: protects the sender's reputation
-GENERIC_OK = ("Als het adres klopt, staat er een mail klaar om je aanmelding te bevestigen. "
-              "Zie je niets? Kijk ook even bij spam.")
+# Everything the API says to a visitor, in the language of the page that asked
+# ("lang" in the JSON body; meldingen.html sends it, Dutch when it is missing).
+MESSAGES = {
+    "nl": {
+        "ok": ("Als het adres klopt, staat er een mail klaar om je aanmelding te bevestigen. "
+               "Zie je niets? Kijk ook even bij spam."),
+        "rate-limited": "Te veel aanmeldingen vanaf dit adres. Probeer het over een uur opnieuw.",
+        "bad-email": "Dat lijkt geen geldig e-mailadres.",
+        "need-filter": "Kies minstens een zoekterm of een categorie.",
+        "bad-reminder": "Kies een herinnering uit de lijst.",
+        "bad-input": "Ongeldige invoer.",
+        "mail-failed": "De bevestigingsmail kon niet worden verstuurd. Probeer het later opnieuw.",
+        "confirm-dead": ("Deze link werkt niet (meer). Een aanmelding die niet binnen 48 uur is "
+                         "bevestigd, is gewist; meld je dan opnieuw aan."),
+        "manage-dead": "Deze link werkt niet (meer). Misschien ben je al afgemeld.",
+        "bad-watch": "Ongeldige melding.",
+        "server": "Er ging iets mis. Probeer het later opnieuw.",
+    },
+    "en": {
+        "ok": ("If the address is right, an email is on its way to confirm your sign-up. "
+               "Nothing there? Have a look in your spam folder too."),
+        "rate-limited": "Too many sign-ups from this address. Please try again in an hour.",
+        "bad-email": "That doesn't look like a valid email address.",
+        "need-filter": "Choose at least a search term or a category.",
+        "bad-reminder": "Choose a reminder from the list.",
+        "bad-input": "Invalid input.",
+        "mail-failed": "The confirmation email could not be sent. Please try again later.",
+        "confirm-dead": ("This link doesn't work (any more). A sign-up that isn't confirmed within "
+                         "48 hours is deleted; please sign up again."),
+        "manage-dead": "This link doesn't work (any more). Perhaps you have already unsubscribed.",
+        "bad-watch": "Invalid alert.",
+        "server": "Something went wrong. Please try again later.",
+    },
+}
 
 
 def log(msg: str) -> None:
@@ -83,43 +115,47 @@ class App:
 
     # -- endpoints ----------------------------------------------------------
     def subscribe(self, body: dict, ip: str):
+        lang = W.lang_of(body.get("lang"))
+        m = MESSAGES[lang]
         if body.get("website"):            # the honeypot field humans never see
             self.track(None, {"honeypot": 1})
-            return 202, {"ok": True, "message": GENERIC_OK}
+            return 202, {"ok": True, "message": m["ok"]}
         if not self.allow(ip):
             self.track(None, {"rate_limited": 1})
-            return 429, {"error": "Te veel aanmeldingen vanaf dit adres. Probeer het over een uur opnieuw."}
+            return 429, {"error": m["rate-limited"]}
         email = W.valid_email(str(body.get("email") or ""))
         if not email:
-            return 400, {"error": "Dat lijkt geen geldig e-mailadres."}
+            return 400, {"error": m["bad-email"]}
         try:
             w = W.normalise(body)
         except (ValueError, TypeError) as exc:
-            return 400, {"error": str(exc) if isinstance(exc, ValueError) else "Ongeldige invoer."}
+            key = str(exc) if isinstance(exc, ValueError) and str(exc) in m else "bad-input"
+            return 400, {"error": m[key]}
         self.track(None, {"signup_requests": 1})
         if not self.mail_budget():
             self.track(None, {"rate_limited": 1})
             log("subscribe: hourly confirmation budget spent, not mailing")
-            return 202, {"ok": True, "message": GENERIC_OK}
-        row, reason = self.store.subscribe(email, w)
+            return 202, {"ok": True, "message": m["ok"]}
+        row, reason = self.store.subscribe(email, w, lang)
         if row is None:
             log(f"subscribe: no mail ({reason})")
-            return 202, {"ok": True, "message": GENERIC_OK}
+            return 202, {"ok": True, "message": m["ok"]}
         try:
-            self.mailer.confirm(email, w, self.store.confirm_token(row))
+            self.mailer.confirm(email, w, self.store.confirm_token(row), lang)
         except Exception as exc:  # noqa: BLE001 - reported, not raised
             log(f"subscribe: confirmation mail failed: {type(exc).__name__}: {exc}")
             self.failed("confirm", exc)
-            return 503, {"error": "De bevestigingsmail kon niet worden verstuurd. Probeer het later opnieuw."}
-        log(f"subscribe: confirmation sent for watch {row['id']}")
-        self.track("signup-requested", {"confirm_mails": 1}, track.props(w), who=row["subscriber_id"])
-        return 202, {"ok": True, "message": GENERIC_OK}
+            return 503, {"error": m["mail-failed"]}
+        log(f"subscribe: confirmation sent for watch {row['id']} ({lang})")
+        self.track("signup-requested", {"confirm_mails": 1}, {**track.props(w), "lang": lang},
+                   who=row["subscriber_id"])
+        return 202, {"ok": True, "message": m["ok"]}
 
     def confirm(self, body: dict):
+        lang = W.lang_of(body.get("lang"))
         found = self.store.confirm(str(body.get("token") or ""))
         if not found:
-            return 404, {"error": "Deze link werkt niet (meer). Een aanmelding die niet binnen "
-                                  "48 uur is bevestigd, is gewist; meld je dan opnieuw aan."}
+            return 404, {"error": MESSAGES[lang]["confirm-dead"]}
         row, sub, fresh = found
         if fresh:
             n = notify.baseline(self.store, row, self.events()[1], date.today())
@@ -127,12 +163,12 @@ class App:
             first = sub["confirmed_at"] == row["confirmed_at"]
             self.track("signup-confirmed", {"confirmations": 1, "new_subscribers": int(first)},
                        {**track.props(W.from_row(row), selection=True),
-                        "new_subscriber": "ja" if first else "nee"}, who=sub["id"])
+                        "new_subscriber": "ja" if first else "nee", "lang": sub["lang"]}, who=sub["id"])
             # Off the request thread: the visitor's confirmation must not wait
             # on, or fail with, a mail to the owner.
             threading.Thread(target=self.tell_admin, args=(sub, row), daemon=True).start()
-        return 200, {"ok": True, "watch": W.describe(W.from_row(row)),
-                     "url": W.site_url(self.mailer.base, W.from_row(row)),
+        return 200, {"ok": True, "watch": W.describe(W.from_row(row), lang),
+                     "url": W.site_url(self.mailer.base, W.from_row(row), lang),
                      "manage": self.store.manage_token(sub)}
 
     def tell_admin(self, sub, row) -> None:
@@ -145,7 +181,8 @@ class App:
         remind = track.REMIND_LABEL.get(w["remind_days"], "?")
         subject = ("uitjes: nieuwe aanmelding" if first
                    else "uitjes: bestaande abonnee volgt nog een selectie")
-        text = (f"{sub['email']} volgt nu: {W.describe(w)}\n\n"
+        text = (f"{sub['email']} volgt nu: {W.describe(w)}"
+                f"{' (Engelstalig)' if sub['lang'] == 'en' else ''}\n\n"
                 f"Herinnering: {remind}. Op de site: {W.site_url(self.mailer.base, w)}\n\n"
                 f"In totaal {stats['subscribers']} abonnee(s) met {stats['watches']} melding(en).")
         try:
@@ -155,24 +192,26 @@ class App:
             log(f"confirm: owner mail failed: {type(exc).__name__}: {exc}")
 
     def manage(self, body: dict):
+        lang = W.lang_of(body.get("lang"))
         sub = self.store.subscriber_by_token(str(body.get("token") or ""))
         if not sub:
-            return 404, {"error": "Deze link werkt niet (meer). Misschien ben je al afgemeld."}
+            return 404, {"error": MESSAGES[lang]["manage-dead"]}
         out = []
         for row in self.store.watches(sub["id"]):
             w = W.from_row(row)
-            out.append({"id": row["id"], "text": W.describe(w), "remind_days": w["remind_days"],
-                        "url": W.site_url(self.mailer.base, w)})
+            out.append({"id": row["id"], "text": W.describe(w, lang), "remind_days": w["remind_days"],
+                        "url": W.site_url(self.mailer.base, w, lang)})
         return 200, {"email": sub["email"], "watches": out}
 
     def delete_watch(self, body: dict):
+        m = MESSAGES[W.lang_of(body.get("lang"))]
         sub = self.store.subscriber_by_token(str(body.get("token") or ""))
         if not sub:
-            return 404, {"error": "Deze link werkt niet (meer)."}
+            return 404, {"error": m["manage-dead"]}
         try:
             watch_id = int(body.get("id"))
         except (TypeError, ValueError):
-            return 400, {"error": "Ongeldige melding."}
+            return 400, {"error": m["bad-watch"]}
         gone = self.store.delete_watch(sub["id"], watch_id)
         log(f"delete-watch: subscriber {sub['id']}{' (now gone)' if gone else ''}")
         self.track("selection-removed", {"watch_deletes": 1, "unsubscribes": int(gone)},
@@ -298,7 +337,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == PREFIX + "one-click":
             token = (parse_qs(parts.query).get("t") or [""])[0]
             self.app.unsubscribe(token, via="one-click")
-            return self._send(200, b"Afgemeld.\n", "text/plain; charset=utf-8")
+            return self._send(200, b"Afgemeld / Unsubscribed.\n", "text/plain; charset=utf-8")
 
         origin = self.headers.get("Origin")
         if origin and origin != self.app.origin:
@@ -310,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(body, dict):
                 raise ValueError
         except ValueError:
-            return self._send(400, {"error": "Ongeldige invoer."})
+            return self._send(400, {"error": MESSAGES["nl"]["bad-input"]})
 
         routes = {
             "subscribe": lambda: self.app.subscribe(body, self._ip()),
@@ -326,7 +365,7 @@ class Handler(BaseHTTPRequestHandler):
             status, payload = action()
         except Exception as exc:  # noqa: BLE001
             log(f"{path}: {type(exc).__name__}: {exc}")
-            status, payload = 500, {"error": "Er ging iets mis. Probeer het later opnieuw."}
+            status, payload = 500, {"error": MESSAGES[W.lang_of(body.get("lang"))]["server"]}
         return self._send(status, payload)
 
 

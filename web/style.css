@@ -186,6 +186,9 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .92em; background
 /* ---- mail alerts: the agenda's link to them, and meldingen.html ---- */
 .bar-head .alert-link { flex: none; color: var(--ink); text-decoration: none;
   border-bottom: 1px solid var(--accent); }
+/* The bell before "Volg deze selectie", on the link and on the page's button;
+   currentColor, so it follows the text in both themes. */
+svg.bell { width: 1em; height: 1em; vertical-align: -0.14em; margin-right: .3em; }
 .alerts { padding-block: .5rem 3rem; }
 .alerts > * { max-width: 42rem; }
 .alerts fieldset { border: 0; border-top: 1px solid var(--line); margin: 0 0 1.25rem; padding: 1rem 0 0; }

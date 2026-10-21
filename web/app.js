@@ -217,13 +217,14 @@ function writeTally(n) {
   tally.append(el("span", "active", active.join(" · ")));
 }
 
-/* "Mail me" for the view on screen: meldingen.html takes the same q/city/cat
+/* "Volg deze selectie": mail alerts for the view on screen. meldingen.html takes the same q/city/cat
    parameters as this page, so the link hands the filters over as they are.
    Only for a view with a search or a category - a city alone is the whole
    agenda, which the alerts service refuses as a watch. Shown once the service
    says it really sends mail (/api/alerts/info); until the mailbox exists it
    writes mail to a folder, and the link stays away. */
 let alertsLive = false;
+const BELL_SVG = '<svg class="bell" aria-hidden="true" focusable="false" viewBox="0 0 16 16"><path d="M8 1.5a4.5 4.5 0 0 0-4.5 4.5v2.6L2.2 11h11.6l-1.3-2.4V6A4.5 4.5 0 0 0 8 1.5Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M6.3 12.8a1.8 1.8 0 0 0 3.4 0" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
 fetch("/api/alerts/info").then((r) => r.ok && r.json()).then((info) => {
   alertsLive = Boolean(info && info.mail === "smtp");
   writeAlertLink();
@@ -236,8 +237,11 @@ function writeAlertLink() {
     return;
   }
   if (!a) {
-    a = el("a", "alert-link", "Mail me bij nieuwe");
+    a = el("a", "alert-link", "Volg deze selectie");
     a.id = "alert-link";
+    // The bell is drawn, not the emoji: an emoji renders as a full-colour
+    // yellow bell on most devices, and this site is greys plus one accent.
+    a.insertAdjacentHTML("afterbegin", BELL_SVG);
     $("#tally").after(a);
   }
   const p = new URLSearchParams();

@@ -22,7 +22,7 @@ from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from . import notify
+from . import notify, track
 from . import watch as W
 
 PREFIX = "/api/alerts/"
@@ -38,8 +38,11 @@ def log(msg: str) -> None:
 
 
 class App:
-    def __init__(self, store, mailer, events_path: str):
+    def __init__(self, store, mailer, events_path: str, env: dict | None = None):
         self.store, self.mailer, self.events_path = store, mailer, events_path
+        env = env or {}
+        self.track = track.Tracker(store, env, mailer.base, log=log)
+        self.stats_file = env.get("ALERTS_STATS_FILE", "")
         self.per_ip: dict[str, deque] = defaultdict(deque)
         self.mail_times: deque = deque()
         self.rate_lock = threading.Lock()
@@ -81,8 +84,10 @@ class App:
     # -- endpoints ----------------------------------------------------------
     def subscribe(self, body: dict, ip: str):
         if body.get("website"):            # the honeypot field humans never see
+            self.track(None, {"honeypot": 1})
             return 202, {"ok": True, "message": GENERIC_OK}
         if not self.allow(ip):
+            self.track(None, {"rate_limited": 1})
             return 429, {"error": "Te veel aanmeldingen vanaf dit adres. Probeer het over een uur opnieuw."}
         email = W.valid_email(str(body.get("email") or ""))
         if not email:
@@ -91,7 +96,9 @@ class App:
             w = W.normalise(body)
         except (ValueError, TypeError) as exc:
             return 400, {"error": str(exc) if isinstance(exc, ValueError) else "Ongeldige invoer."}
+        self.track(None, {"signup_requests": 1})
         if not self.mail_budget():
+            self.track(None, {"rate_limited": 1})
             log("subscribe: hourly confirmation budget spent, not mailing")
             return 202, {"ok": True, "message": GENERIC_OK}
         row, reason = self.store.subscribe(email, w)
@@ -102,8 +109,10 @@ class App:
             self.mailer.confirm(email, w, self.store.confirm_token(row))
         except Exception as exc:  # noqa: BLE001 - reported, not raised
             log(f"subscribe: confirmation mail failed: {type(exc).__name__}: {exc}")
+            self.failed("confirm", exc)
             return 503, {"error": "De bevestigingsmail kon niet worden verstuurd. Probeer het later opnieuw."}
         log(f"subscribe: confirmation sent for watch {row['id']}")
+        self.track("signup-requested", {"confirm_mails": 1}, track.props(w))
         return 202, {"ok": True, "message": GENERIC_OK}
 
     def confirm(self, body: dict):
@@ -115,6 +124,10 @@ class App:
         if fresh:
             n = notify.baseline(self.store, row, self.events()[1], date.today())
             log(f"confirm: watch {row['id']} live, {n} existing match(es) marked seen")
+            first = sub["confirmed_at"] == row["confirmed_at"]
+            self.track("signup-confirmed", {"confirmations": 1, "new_subscribers": int(first)},
+                       {**track.props(W.from_row(row), selection=True),
+                        "new_subscriber": "ja" if first else "nee"})
             # Off the request thread: the visitor's confirmation must not wait
             # on, or fail with, a mail to the owner.
             threading.Thread(target=self.tell_admin, args=(sub, row), daemon=True).start()
@@ -129,9 +142,7 @@ class App:
         w = W.from_row(row)
         first = sub["confirmed_at"] == row["confirmed_at"]
         stats = self.store.stats()
-        # Worded as the sign-up page's select offers them.
-        remind = {None: "geen", 0: "op de dag zelf", 1: "een dag van tevoren",
-                  3: "drie dagen van tevoren", 7: "een week van tevoren"}.get(w["remind_days"], "?")
+        remind = track.REMIND_LABEL.get(w["remind_days"], "?")
         subject = ("uitjes: nieuwe aanmelding" if first
                    else "uitjes: bestaande abonnee volgt nog een selectie")
         text = (f"{sub['email']} volgt nu: {W.describe(w)}\n\n"
@@ -164,15 +175,18 @@ class App:
             return 400, {"error": "Ongeldige melding."}
         gone = self.store.delete_watch(sub["id"], watch_id)
         log(f"delete-watch: subscriber {sub['id']}{' (now gone)' if gone else ''}")
+        self.track("selection-removed", {"watch_deletes": 1, "unsubscribes": int(gone)},
+                   {"left_entirely": "ja" if gone else "nee"})
         return 200, {"ok": True, "gone": gone}
 
-    def unsubscribe(self, token: str):
+    def unsubscribe(self, token: str, via: str = "page"):
         sub = self.store.subscriber_by_token(token)
         if not sub:
             # Already gone is success from where the visitor stands.
             return 200, {"ok": True, "gone": True}
         self.store.unsubscribe(sub["id"])
         log(f"unsubscribe: subscriber {sub['id']} deleted")
+        self.track("unsubscribed", {"unsubscribes": 1}, {"via": via})
         return 200, {"ok": True, "gone": True}
 
     # -- the loop -----------------------------------------------------------
@@ -184,19 +198,46 @@ class App:
             if seen is None:
                 log(f"loop: first run, starting from the build of {generated}")
             else:
-                n = notify.announce(self.store, self.mailer, events, today, log=log)
+                try:
+                    n = notify.announce(self.store, self.mailer, events, today, log=log, track=self.track)
+                except Exception as exc:
+                    self.failed("announce", exc)
+                    raise
                 log(f"loop: build {generated} checked, {n} mail(s)")
             self.store.set_meta("announced_generated_at", generated)
         if datetime.now().hour >= notify.REMIND_HOUR and \
                 self.store.get_meta("reminded_day") != today.isoformat():
-            n = notify.remind(self.store, self.mailer, events, today, log=log)
+            try:
+                n = notify.remind(self.store, self.mailer, events, today, log=log, track=self.track)
+            except Exception as exc:
+                self.failed("remind", exc)
+                raise
             log(f"loop: reminders for {today}, {n} mail(s)")
             self.store.set_meta("reminded_day", today.isoformat())
         if self.store.get_meta("pruned_hour") != datetime.now().strftime("%Y-%m-%dT%H"):
             w, s = self.store.prune()
             if w or s:
                 log(f"loop: pruned {w} unconfirmed watch(es), {s} subscriber(s)")
+                self.track("signups-expired", {"expired_signups": w}, {"n": w})
             self.store.set_meta("pruned_hour", datetime.now().strftime("%Y-%m-%dT%H"))
+        self.write_stats()
+
+    def failed(self, kind: str, exc: Exception) -> None:
+        self.track("mail-failed", {"mail_failures": 1}, {"kind": kind})
+        self.store.set_meta("last_failure", json.dumps({
+            "at": datetime.now().astimezone().isoformat(timespec="seconds"), "kind": kind,
+            "error": f"{type(exc).__name__}: {exc}"[:200]}))
+
+    def write_stats(self) -> None:
+        """The dashboard card's JSON, rewritten every loop. Written beside, then
+        renamed over, so a web server never serves half a file."""
+        if not self.stats_file:
+            return
+        tmp = self.stats_file + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(track.summary(self.store, self.mailer), fh, ensure_ascii=False)
+        os.chmod(tmp, 0o664)
+        os.replace(tmp, self.stats_file)
 
     def run_loop(self, every: int = 60) -> None:
         while True:
@@ -251,7 +292,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == PREFIX + "one-click":
             token = (parse_qs(parts.query).get("t") or [""])[0]
-            self.app.unsubscribe(token)
+            self.app.unsubscribe(token, via="one-click")
             return self._send(200, b"Afgemeld.\n", "text/plain; charset=utf-8")
 
         origin = self.headers.get("Origin")

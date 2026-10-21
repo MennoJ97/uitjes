@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 from collections import OrderedDict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from . import watch as W
 from .mailer import PER_WATCH
@@ -48,7 +48,11 @@ def _by_subscriber(watches) -> "OrderedDict[int, list]":
     return grouped
 
 
-def announce(store, mailer, events: list[dict], today: date, log=print) -> int:
+def _no_track(*_args, **_kwargs) -> None:
+    pass
+
+
+def announce(store, mailer, events: list[dict], today: date, log=print, track=_no_track) -> int:
     known = store.known(("seen", "new"))
     upcoming = sorted((ev for ev in events if W.upcoming(ev, today)), key=lambda e: e["start"])
     mailed = 0
@@ -66,11 +70,14 @@ def announce(store, mailer, events: list[dict], today: date, log=print) -> int:
         mailer.announce(sub["email"], sections, store.manage_token(sub))
         store.mark(marks)
         mailed += 1
+        track("alert-mail", {"announce_mails": 1, "events_announced": len(marks)},
+              {"kind": "nieuw", "events": len(marks), "selections": len(sections)})
+        store.set_meta("last_alert_mail", datetime.now().astimezone().isoformat(timespec="seconds"))
         log(f"announce: subscriber {sub_id}, {len(marks)} event(s) in {len(sections)} watch(es)")
     return mailed
 
 
-def remind(store, mailer, events: list[dict], today: date, log=print) -> int:
+def remind(store, mailer, events: list[dict], today: date, log=print, track=_no_track) -> int:
     known = store.known(("remind",))
     mailed = 0
     for sub_id, rows in _by_subscriber(store.live_watches()).items():
@@ -92,5 +99,8 @@ def remind(store, mailer, events: list[dict], today: date, log=print) -> int:
         mailer.remind(sub["email"], sections, store.manage_token(sub))
         store.mark(marks)
         mailed += 1
+        track("alert-mail", {"remind_mails": 1, "events_reminded": len(marks)},
+              {"kind": "herinnering", "events": len(marks), "selections": len(sections)})
+        store.set_meta("last_alert_mail", datetime.now().astimezone().isoformat(timespec="seconds"))
         log(f"remind: subscriber {sub_id}, {len(marks)} event(s)")
     return mailed

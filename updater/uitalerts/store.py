@@ -16,7 +16,7 @@ import hmac
 import os
 import sqlite3
 import threading
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -51,6 +51,14 @@ CREATE TABLE IF NOT EXISTS sent (
   PRIMARY KEY (watch_id, uid, kind)
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+-- Aggregate counters per day (sign-ups, unsubscribes, mails sent...), for the
+-- dashboard card. Numbers only: nothing in here points back at a person.
+CREATE TABLE IF NOT EXISTS daily (
+  day TEXT NOT NULL,
+  metric TEXT NOT NULL,
+  n INTEGER NOT NULL,
+  PRIMARY KEY (day, metric)
+);
 """
 
 # Abuse limits on the one thing a stranger can make us do: send a mail to an
@@ -250,6 +258,35 @@ class Store:
             self.db.execute("INSERT INTO meta (key, value) VALUES (?, ?)"
                             " ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))
 
+    def count(self, metric: str, n: int = 1) -> None:
+        if n:
+            with self.lock:
+                self.db.execute("INSERT INTO daily (day, metric, n) VALUES (?, ?, ?)"
+                                " ON CONFLICT(day, metric) DO UPDATE SET n = n + excluded.n",
+                                (date.today().isoformat(), metric, int(n)))
+
+    def totals(self, days: int | None = None) -> dict[str, int]:
+        """Counter sums over the last `days` days, today included; all time
+        without `days`."""
+        sql, args = "SELECT metric, SUM(n) FROM daily", ()
+        if days:
+            sql, args = sql + " WHERE day > ?", ((date.today() - timedelta(days=days)).isoformat(),)
+        with self.lock:
+            return {m: n for m, n in self.db.execute(sql + " GROUP BY metric", args)}
+
+    def top_selections(self, limit: int = 5) -> list[sqlite3.Row]:
+        """The filters most people follow, by how many follow each."""
+        with self.lock:
+            return self.db.execute(
+                "SELECT q, city, cats, COUNT(*) AS n FROM watch WHERE confirmed_at IS NOT NULL"
+                " GROUP BY q, city, cats ORDER BY n DESC, MIN(confirmed_at) LIMIT ?",
+                (limit,)).fetchall()
+
+    def with_reminder(self) -> int:
+        with self.lock:
+            return self.db.execute("SELECT COUNT(*) FROM watch WHERE confirmed_at IS NOT NULL"
+                                   " AND remind_days IS NOT NULL").fetchone()[0]
+
     def prune(self) -> tuple[int, int]:
         """Forget sign-ups never confirmed within PENDING_TTL, and sent marks
         for events a month gone. Returns (watches, subscribers) removed."""
@@ -261,6 +298,8 @@ class Store:
             s = self.db.execute("DELETE FROM subscriber WHERE id NOT IN (SELECT subscriber_id FROM watch)"
                                 " AND created_at < ?", (cutoff,)).rowcount
             self.db.execute("DELETE FROM sent WHERE day < ?", (month_ago,))
+            self.db.execute("DELETE FROM daily WHERE day < ?",
+                            ((datetime.now() - timedelta(days=400)).date().isoformat(),))
             return w, s
 
     def stats(self) -> dict:

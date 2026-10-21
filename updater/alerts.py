@@ -1,14 +1,16 @@
 """uitjes mail alerts — the uitjes-alerts container's entry point.
 
   python alerts.py serve              API on :8080 plus the notifier loop
-  python alerts.py stats              how many subscribers and watches
+  python alerts.py stats              the dashboard summary (same as the card's JSON)
   python alerts.py tick               one pass of the loop, then exit
   python alerts.py test-mail <addr>   send one test mail (checks SMTP settings)
 
 Environment: ALERTS_BASE_URL (https://uitjes.<domain>), ALERTS_DATA (/data),
 ALERTS_EVENTS (/site/data/events.json), SMTP_HOST / SMTP_PORT / SMTP_USER /
 SMTP_PASSWORD / SMTP_FROM, ALERTS_CONTACT (shown on the page; default the From
-address), ALERTS_MAIL=outbox to write mails to <data>/outbox instead of sending.
+address), ALERTS_MAIL=outbox to write mails to <data>/outbox instead of sending,
+ALERTS_STATS_FILE (a dashboard card's JSON), ALERTS_UMAMI_WEBSITE (a Umami
+website id; custom events go there - see uitalerts/track.py).
 Without SMTP_HOST it is in outbox mode anyway.
 """
 from __future__ import annotations
@@ -22,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from uitalerts.mailer import Mailer  # noqa: E402
 from uitalerts.store import Store  # noqa: E402
+from uitalerts.track import summary  # noqa: E402
 from uitalerts.web import App, serve  # noqa: E402
 
 
@@ -37,14 +40,12 @@ def main() -> int:
     base = env.get("ALERTS_BASE_URL", "http://localhost:8080")
     store = Store(data)
     mailer = Mailer(env, data, base)
-    app = App(store, mailer, env.get("ALERTS_EVENTS", "/site/data/events.json"))
+    app = App(store, mailer, env.get("ALERTS_EVENTS", "/site/data/events.json"), env)
 
     if args.command == "serve":
         serve(app, args.port)
     elif args.command == "stats":
-        print(json.dumps({**store.stats(), "mail": mailer.mode,
-                          "announced_build": store.get_meta("announced_generated_at"),
-                          "reminded_day": store.get_meta("reminded_day")}, indent=2))
+        print(json.dumps(summary(store, mailer), indent=2, ensure_ascii=False))
     elif args.command == "tick":
         app.tick()
     elif args.command == "test-mail":

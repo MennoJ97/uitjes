@@ -183,6 +183,38 @@ footer { padding-block: 1.5rem 3.5rem; border-top: 1px solid var(--line); margin
 footer p { font-size: .8125rem; color: var(--muted); margin: 0 0 .4rem; }
 code { font-family: ui-monospace, Menlo, monospace; font-size: .92em; background: var(--accent-soft); padding: 1px 5px; }
 
+/* ---- mail alerts: the agenda's link to them, and meldingen.html ---- */
+.bar-head .alert-link { flex: none; color: var(--ink); text-decoration: none;
+  border-bottom: 1px solid var(--accent); }
+.alerts { padding-block: .5rem 3rem; }
+.alerts > * { max-width: 42rem; }
+.alerts fieldset { border: 0; border-top: 1px solid var(--line); margin: 0 0 1.25rem; padding: 1rem 0 0; }
+.alerts legend { font-weight: 700; padding: 0 .5rem 0 0; }
+.alerts .field { display: block; margin: 0 0 1rem; }
+.alerts .hint { color: var(--muted); font-size: .8125rem; }
+.alerts .field .hint { display: block; }
+.alerts input[type="search"], .alerts input[type="email"], .alerts select {
+  display: block; width: 100%; margin-top: .3rem; font: inherit; color: var(--ink);
+  background: var(--bg); padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 3px; }
+.alerts input:focus, .alerts select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.alerts .seg { margin-top: .35rem; }
+.catgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .3rem 1rem;
+  margin-top: .4rem; font-size: .9375rem; }
+.catgrid input { accent-color: var(--accent); }
+.alerts .privacy { font-size: .8125rem; color: var(--muted); }
+.alerts button.primary { font: inherit; font-weight: 700; color: #fff; background: var(--accent);
+  border: 0; border-radius: 3px; padding: .6rem 1.1rem; cursor: pointer; }
+.alerts button.primary:disabled { opacity: .55; cursor: default; }
+.alerts button.link { color: var(--muted); border-bottom: 1px solid var(--line); }
+.alerts button.danger { color: var(--fail); }
+.alert-status { min-height: 1.4em; margin: 0 0 1rem; }
+.alert-status.good { color: var(--ok); font-weight: 700; }
+.alert-status.bad { color: var(--fail); font-weight: 700; }
+.watchlist { padding-left: 1.1rem; }
+.watchlist li { margin-bottom: .5rem; }
+/* The honeypot: off-screen rather than display:none, which some bots skip. */
+.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+
 @media (prefers-reduced-motion: reduce) {
   .event img, .event h3 { transition: none; }
 }

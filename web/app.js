@@ -217,6 +217,36 @@ function writeTally(n) {
   tally.append(el("span", "active", active.join(" · ")));
 }
 
+/* "Mail me" for the view on screen: meldingen.html takes the same q/city/cat
+   parameters as this page, so the link hands the filters over as they are.
+   Only for a view with a search or a category - a city alone is the whole
+   agenda, which the alerts service refuses as a watch. Shown once the service
+   says it really sends mail (/api/alerts/info); until the mailbox exists it
+   writes mail to a folder, and the link stays away. */
+let alertsLive = false;
+fetch("/api/alerts/info").then((r) => r.ok && r.json()).then((info) => {
+  alertsLive = Boolean(info && info.mail === "smtp");
+  writeAlertLink();
+}).catch(() => { /* no alerts service: no link */ });
+
+function writeAlertLink() {
+  let a = $("#alert-link");
+  if (!alertsLive || !(state.q || state.cats.size)) {
+    if (a) a.remove();
+    return;
+  }
+  if (!a) {
+    a = el("a", "alert-link", "Mail me bij nieuwe");
+    a.id = "alert-link";
+    $("#tally").after(a);
+  }
+  const p = new URLSearchParams();
+  if (state.q) p.set("q", qRaw || state.q);
+  if (state.city !== "all") p.set("city", state.city);
+  if (state.cats.size) p.set("cat", [...state.cats].sort().join(","));
+  a.href = "/meldingen?" + p.toString().replace(/%2C/g, ",");
+}
+
 /* ---------- rendering ---------- */
 function row(ev) {
   const a = el("a", "event");
@@ -369,6 +399,7 @@ function render() {
   results.replaceChildren();
 
   writeTally(hits.length);
+  writeAlertLink();
 
   if (!hits.length) {
     const p = el("p", "empty", "Niets gevonden met deze filters.");

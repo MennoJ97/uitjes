@@ -19,6 +19,11 @@ WORKDIR /work
 # No pip install: the builder is Python 3.12 standard library only.
 COPY build.py sources.toml crontab entrypoint.sh ./
 COPY uitradar ./uitradar
+# The mail-alerts service (uitjes-alerts in compose) runs from this same image:
+# it matches watches with uitradar's category labels, so one build keeps the
+# two in step.
+COPY alerts.py ./
+COPY uitalerts ./uitalerts
 COPY data ./data
 RUN chmod +x entrypoint.sh
 

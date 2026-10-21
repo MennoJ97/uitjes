@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="nl" data-site="uitjes">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Mail alerts: sign up, confirm, manage, unsubscribe - one page, the mode
+     picked by meldingen.js from the URL fragment (#bevestig=, #beheer=,
+     #afmelden=). Tokens are in the fragment so they never reach a server log;
+     the API is ../updater/uitalerts. No Umami on this page on purpose:
+     it handles addresses and tokens, and there is nothing here worth counting.
+     Not indexed: a form has nothing to find. -->
+<title>Meldingen — uitjes</title>
+<meta name="robots" content="noindex">
+<meta name="description" content="Krijg een mail als er een nieuw uitje bijkomt dat bij je zoekopdracht past.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="stylesheet" href="https://mhjansen.nl/family.css">
+<script src="https://mhjansen.nl/family.js"></script>
+<link rel="stylesheet" href="/style.css?v=cb9097f7">
+</head>
+<body class="alerts-page">
+<nav class="topnav" aria-label="mhjansen.nl">
+  <div class="wrap">
+    <span class="brand"><a class="apex" href="https://mhjansen.nl">mhjansen.nl</a> / <a href="/">uitjes</a></span>
+    <span class="nav-end"><button class="theme-toggle" hidden></button></span>
+  </div>
+</nav>
+<header class="intro wrap">
+  <h1>Meldingen</h1>
+  <p class="tagline">Een mail als er een uitje bijkomt dat bij je zoekopdracht past, en als je wilt
+    een herinnering vlak ervoor. Gratis, zonder account, en afmelden kan met één klik.</p>
+</header>
+<main class="wrap alerts">
+  <p class="alert-status" id="status" role="status" aria-live="polite"></p>
+
+  <!-- Sign-up -->
+  <form id="signup" hidden novalidate>
+    <fieldset>
+      <legend>Waarvoor?</legend>
+      <label class="field">Zoekterm <span class="hint">artiest, voorstelling, zaal of genre; alle woorden moeten erin staan</span>
+        <input type="search" id="f-q" maxlength="80" autocomplete="off" spellcheck="false" placeholder="bijvoorbeeld: jazz, Paradiso, pubquiz english">
+      </label>
+      <div class="field">Stad
+        <div class="seg" id="f-city" role="radiogroup" aria-label="Stad">
+          <button type="button" data-city="all" class="on" role="radio" aria-checked="true">Beide</button>
+          <button type="button" data-city="Amsterdam" role="radio" aria-checked="false">Amsterdam</button>
+          <button type="button" data-city="Utrecht" role="radio" aria-checked="false">Utrecht</button>
+        </div>
+      </div>
+      <div class="field">Categorieën <span class="hint">geen keuze is alle categorieën</span>
+        <div class="catgrid" id="f-cats"></div>
+      </div>
+      <label class="field">Herinnering
+        <select id="f-remind">
+          <option value="">Geen, alleen bij aankondiging</option>
+          <option value="0">Op de dag zelf</option>
+          <option value="1">Een dag van tevoren</option>
+          <option value="3">Drie dagen van tevoren</option>
+          <option value="7">Een week van tevoren</option>
+        </select>
+      </label>
+    </fieldset>
+    <fieldset>
+      <legend>Naar welk adres?</legend>
+      <label class="field">E-mailadres
+        <input type="email" id="f-email" required autocomplete="email" inputmode="email">
+      </label>
+      <!-- Honeypot: hidden from people, filled in by form-stuffing bots. -->
+      <div class="hp" aria-hidden="true"><label>Website <input type="text" id="f-website" tabindex="-1" autocomplete="off"></label></div>
+    </fieldset>
+    <p class="privacy">Je krijgt eerst een mail om je aanmelding te bevestigen; zonder bevestiging
+      wordt je adres na 48 uur gewist. We bewaren alleen je e-mailadres, je zoekopdracht en welke
+      uitjes we je al gemaild hebben, en gebruiken dat nergens anders voor. Geen tracking in de
+      mails. Afmelden wist alles meteen.<span id="contact"></span></p>
+    <button type="submit" class="primary" id="f-submit">Meld me aan</button>
+  </form>
+
+  <!-- Confirm / unsubscribe: one button, because a GET from a mail scanner
+       must never confirm or unsubscribe anything. -->
+  <section id="act" hidden>
+    <p id="act-text"></p>
+    <button type="button" class="primary" id="act-button"></button>
+  </section>
+
+  <!-- Manage -->
+  <section id="manage" hidden>
+    <p>Meldingen voor <b id="m-email"></b>:</p>
+    <ul class="watchlist" id="m-list"></ul>
+    <p><a href="/meldingen" id="m-add">Nog een melding toevoegen</a></p>
+    <p><button type="button" class="link danger" id="m-leave">Afmelden voor alles en mijn adres wissen</button></p>
+  </section>
+</main>
+<script src="/meldingen.js?v=2155a66f"></script>
+</body>
+</html>

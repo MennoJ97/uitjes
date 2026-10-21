@@ -71,7 +71,7 @@ def announce(store, mailer, events: list[dict], today: date, log=print, track=_n
         store.mark(marks)
         mailed += 1
         track("alert-mail", {"announce_mails": 1, "events_announced": len(marks)},
-              {"kind": "nieuw", "events": len(marks), "selections": len(sections)})
+              {"kind": "nieuw", "events": len(marks), "selections": len(sections)}, who=sub_id)
         store.set_meta("last_alert_mail", datetime.now().astimezone().isoformat(timespec="seconds"))
         log(f"announce: subscriber {sub_id}, {len(marks)} event(s) in {len(sections)} watch(es)")
     return mailed
@@ -100,7 +100,7 @@ def remind(store, mailer, events: list[dict], today: date, log=print, track=_no_
         store.mark(marks)
         mailed += 1
         track("alert-mail", {"remind_mails": 1, "events_reminded": len(marks)},
-              {"kind": "herinnering", "events": len(marks), "selections": len(sections)})
+              {"kind": "herinnering", "events": len(marks), "selections": len(sections)}, who=sub_id)
         store.set_meta("last_alert_mail", datetime.now().astimezone().isoformat(timespec="seconds"))
         log(f"remind: subscriber {sub_id}, {len(marks)} event(s)")
     return mailed

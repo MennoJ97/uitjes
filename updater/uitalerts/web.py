@@ -112,7 +112,7 @@ class App:
             self.failed("confirm", exc)
             return 503, {"error": "De bevestigingsmail kon niet worden verstuurd. Probeer het later opnieuw."}
         log(f"subscribe: confirmation sent for watch {row['id']}")
-        self.track("signup-requested", {"confirm_mails": 1}, track.props(w))
+        self.track("signup-requested", {"confirm_mails": 1}, track.props(w), who=row["subscriber_id"])
         return 202, {"ok": True, "message": GENERIC_OK}
 
     def confirm(self, body: dict):
@@ -127,7 +127,7 @@ class App:
             first = sub["confirmed_at"] == row["confirmed_at"]
             self.track("signup-confirmed", {"confirmations": 1, "new_subscribers": int(first)},
                        {**track.props(W.from_row(row), selection=True),
-                        "new_subscriber": "ja" if first else "nee"})
+                        "new_subscriber": "ja" if first else "nee"}, who=sub["id"])
             # Off the request thread: the visitor's confirmation must not wait
             # on, or fail with, a mail to the owner.
             threading.Thread(target=self.tell_admin, args=(sub, row), daemon=True).start()
@@ -176,7 +176,7 @@ class App:
         gone = self.store.delete_watch(sub["id"], watch_id)
         log(f"delete-watch: subscriber {sub['id']}{' (now gone)' if gone else ''}")
         self.track("selection-removed", {"watch_deletes": 1, "unsubscribes": int(gone)},
-                   {"left_entirely": "ja" if gone else "nee"})
+                   {"left_entirely": "ja" if gone else "nee"}, who=sub["id"])
         return 200, {"ok": True, "gone": gone}
 
     def unsubscribe(self, token: str, via: str = "page"):
@@ -186,7 +186,7 @@ class App:
             return 200, {"ok": True, "gone": True}
         self.store.unsubscribe(sub["id"])
         log(f"unsubscribe: subscriber {sub['id']} deleted")
-        self.track("unsubscribed", {"unsubscribes": 1}, {"via": via})
+        self.track("unsubscribed", {"unsubscribes": 1}, {"via": via}, who=sub["id"])
         return 200, {"ok": True, "gone": True}
 
     # -- the loop -----------------------------------------------------------

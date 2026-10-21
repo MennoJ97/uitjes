@@ -15,9 +15,19 @@ Use its own Umami website, not uitjes's: Umami makes a session of whatever
 sends it events, so on the uitjes site this would count as one extra visitor a
 day. Events carry aggregate properties only - city, categories, counts, and for
 a confirmed sign-up the selection it follows - never an address.
+
+Umami builds funnels and goals from sessions, and every event here comes from
+one server with one User-Agent, which Umami would fold into a single session.
+So each event that belongs to a subscriber carries Umami's distinct id: an HMAC
+of the subscriber's row id under the token key. It is stable for one
+subscriber, so "requested -> confirmed" works as a funnel, and it is not the
+address. Once someone unsubscribes their row is gone, and nothing can tie the
+pseudonym back to them.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import threading
 import urllib.request
@@ -38,17 +48,26 @@ class Tracker:
         self.endpoint = env.get("ALERTS_UMAMI_URL") or base_url.rstrip("/") + "/_u/api/send"
         self.hostname = urlsplit(base_url).hostname or "localhost"
 
-    def __call__(self, event: str | None, counts: dict[str, int], data: dict | None = None) -> None:
+    def __call__(self, event: str | None, counts: dict[str, int], data: dict | None = None,
+                 who: int | None = None) -> None:
+        """who: the subscriber's row id, when the event is about one."""
         for metric, n in counts.items():
             self.store.count(metric, n)
         if event and self.website:
-            threading.Thread(target=self._send, args=(event, data or {}), daemon=True).start()
+            threading.Thread(target=self._send, args=(event, data or {}, self.pseudonym(who)),
+                             daemon=True).start()
 
-    def _send(self, name: str, data: dict) -> None:
-        body = json.dumps({"type": "event", "payload": {
-            "website": self.website, "hostname": self.hostname, "language": "nl",
-            "url": "/meldingen", "title": "uitjes meldingen", "name": name, "data": data,
-        }}).encode()
+    def pseudonym(self, who: int | None) -> str | None:
+        if who is None:
+            return None
+        return hmac.new(self.store.secret, f"umami:{who}".encode(), hashlib.sha256).hexdigest()[:20]
+
+    def _send(self, name: str, data: dict, distinct: str | None) -> None:
+        payload = {"website": self.website, "hostname": self.hostname, "language": "nl",
+                   "url": "/meldingen", "title": "uitjes meldingen", "name": name, "data": data}
+        if distinct:
+            payload["id"] = distinct
+        body = json.dumps({"type": "event", "payload": payload}).encode()
         req = urllib.request.Request(self.endpoint, data=body, headers={
             "Content-Type": "application/json", "User-Agent": UA})
         try:

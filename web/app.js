@@ -7,7 +7,7 @@ const CATEGORY = {
   theatre: ["Theater", "theater"], dance: ["Dans", "dans"], comedy: ["Comedy", "comedy"],
   film: ["Film", "film"], festival: ["Festivals", "festival"], market: ["Markten", "markt"],
   exhibition: ["Exposities", "expositie"], family: ["Familie", "familie"], talk: ["Lezingen", "lezing"],
-  sports: ["Sport", "sport"], other: ["Overig", "overig"],
+  sports: ["Sport", "sport"], quiz: ["Quizzen", "quiz"], other: ["Overig", "overig"],
 };
 const catPlural = (c) => (CATEGORY[c] || [c])[0];
 const catSingular = (c) => (CATEGORY[c] || [c, c])[1];

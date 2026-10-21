@@ -27,14 +27,26 @@ instead of failing the source, for an API that answers a page past the end with
 an error rather than an empty list (WordPress returns HTTP 400). The first page
 still has to work, so a dead host is still a failed source, not a silent zero.
 
+A Next.js page is an API too: its server-rendered state sits in a
+<script id="__NEXT_DATA__"> block. `embedded = "next_data"` reads the JSON out
+of the page instead of asking for JSON. That state is a client cache, not a
+list, and where the events sit in it depends on what the page happened to load
+(Bash.social keeps them under the fourth query of a react-query dump), so
+`list_path = "*"` takes every object anywhere in the tree that has both the
+title and the start field - the shape is the address.
+
 `build.py --probe <id>` prints what came back so you can iterate on the paths.
 """
 from __future__ import annotations
 
+import json
+import re
 from urllib.parse import urljoin
 
 from ..model import Event, classify, parse_dt
 from ..net import FetchError
+
+_NEXT_DATA = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 
 FIELDS = ("title", "start", "start_time", "end", "venue", "city", "url", "image",
           "summary", "price", "category")
@@ -79,7 +91,7 @@ def fetch(cfg: dict, http) -> list[Event]:
         for page in pages:
             url = template.replace("{page}", str(page)) if page is not None else template
             try:
-                payload = http.get_json(url, headers=cfg.get("headers"), ttl=cfg.get("ttl"))
+                payload = _load(http, url, cfg)
             except FetchError:
                 # Walking one page past the end is how you find the end on an
                 # API that errors instead of answering with []. Only once
@@ -88,7 +100,10 @@ def fetch(cfg: dict, http) -> list[Event]:
                 if stop_on_page_error and out:
                     break
                 raise
-            rows = _dig(payload, cfg.get("list_path", ""))
+            if cfg.get("list_path") == "*":
+                rows = list(_records(payload, fields["title"], fields["start"]))
+            else:
+                rows = _dig(payload, cfg.get("list_path", ""))
             if isinstance(rows, dict):
                 rows = list(rows.values())
             for row in rows or []:
@@ -98,6 +113,34 @@ def fetch(cfg: dict, http) -> list[Event]:
             if not rows:
                 break
     return out
+
+
+def _load(http, url: str, cfg: dict):
+    if cfg.get("embedded") != "next_data":
+        return http.get_json(url, headers=cfg.get("headers"), ttl=cfg.get("ttl"))
+    body = http.get(url, headers=cfg.get("headers"), ttl=cfg.get("ttl"))
+    match = _NEXT_DATA.search(body)
+    if not match:
+        raise ValueError("no __NEXT_DATA__ on the page")
+    return json.loads(match.group(1))
+
+
+def _records(node, *paths: str):
+    """Every object in the tree on which all of `paths` resolve, once each."""
+    seen: set[str] = set()
+    stack = [node]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if all(_dig(node, p) not in (None, "") for p in paths):
+                key = json.dumps([_dig(node, p) for p in paths], default=str)
+                if key not in seen:
+                    seen.add(key)
+                    yield node
+                continue
+            stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
 
 
 def _to_event(row, fields: dict, cfg: dict, cmap: dict, base: str) -> Event | None:

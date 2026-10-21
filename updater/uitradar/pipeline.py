@@ -71,6 +71,13 @@ def run_source(spec: dict, http, root: str) -> tuple[list[Event], dict]:
         report["seconds"] = round(time.time() - started, 2)
         return [], report
 
+    # For a source read for one strand of its programme: a café's agenda where
+    # only the pubquiz is wanted, not its bingo brunch or brewery tour. A title
+    # must contain one of these words (any case) to be kept.
+    keep = [w.lower() for w in spec.get("keep_title_contains") or []]
+    if keep:
+        events = [ev for ev in events if any(w in (ev.title or "").lower() for w in keep)]
+
     fallback = list(spec.get("fallback_categories") or [])
     # The stronger sibling of fallback_categories, for a venue that only does
     # one thing and publishes no genre at all: take the category from the
@@ -95,6 +102,12 @@ def run_source(spec: dict, http, root: str) -> tuple[list[Event], dict]:
         # after keyword inference has already failed.
         elif fallback and ev.categories == ["other"]:
             ev.categories = fallback
+        # A quiz is a quiz whoever lists it, and nobody's genre list has the
+        # word: uitamsterdam files a pubquiz under "uitgaan" (club), Tivoli its
+        # Popquiz under pop, so the source label always beats the keyword pass.
+        # Added in front rather than instead - a film quiz is still film.
+        if "quiz" in ev.title.lower() and "quiz" not in ev.categories:
+            ev.categories = ["quiz"] + [c for c in ev.categories if c != "other"]
     report["count"] = len(events)
     report["seconds"] = round(time.time() - started, 2)
     return events, report
@@ -390,9 +403,17 @@ def _gap(a: Event, b: Event) -> int:
 
 def _merge(keeper: Event, other: Event) -> None:
     """Lower-priority duplicate donates whatever the keeper is missing."""
-    for field_name in ("venue", "image", "summary", "price", "url", "end"):
+    for field_name in ("venue", "image", "summary", "price", "url"):
         if not getattr(keeper, field_name) and getattr(other, field_name):
             setattr(keeper, field_name, getattr(other, field_name))
+    # An end on another day turns a performance into a run. UITagenda lists
+    # De Utrechter's monthly pubquiz once, spanning every date of the series,
+    # and donated that span to the one Sunday it merged with: "t/m 29 nov" on
+    # a three-hour quiz. A timed keeper is one evening, so it only takes an end
+    # on its own day; a date-only keeper (a festival) still takes a range.
+    if not keeper.end and other.end and (
+            keeper.all_day or other.end[:10] == (keeper.start or "")[:10]):
+        keeper.end = other.end
     if keeper.categories == ["other"] and other.categories != ["other"]:
         keeper.categories = other.categories
     # The dropped title is often the more searchable one - Uit Amsterdam calls

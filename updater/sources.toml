@@ -110,6 +110,14 @@ source_priority = [
   "ziggodome",
   "afaslive",
   "johancruijffarena",
+  "oerknal",
+  "oedipus",
+  "troost",
+  "quizitive",
+  "averechts",
+  "roodnoot",
+  "stathe",
+  "pubquiz_manual",
   "ticketmaster_nl",
   "uitamsterdam",
   "uitagenda_utrecht",
@@ -715,6 +723,182 @@ dans = "dance"
 "summer dance forever" = "dance"
 "literair / wetenschap / politiek / kunst" = "talk"
 "poëzie / spoken word" = "talk"
+
+
+# ---------------------------------------------------------------------------
+# PUBQUIZZEN — the one strand of going out that no agenda carries: a quiz is a
+# café's standing Monday night, announced on a chalkboard and an Instagram
+# story. Where a café publishes dated quiz nights they are read here; the rest
+# are weekly or monthly rules in data/manual/quizzes.json (pubquiz_manual).
+# Every source below keeps only titles with "quiz" in them - they are read for
+# their quiz and nothing else on their agenda.
+# ---------------------------------------------------------------------------
+
+# Eetcafé Oerknal, the Science Park café: Dutch quiz the first Monday of the
+# month, international quiz a Tuesday mid-month. Their own site links out to
+# Bash.social for dates, and that page is Next.js with the organisation's next
+# ten events (plus a few past ones) in __NEXT_DATA__ - about two months ahead.
+# Bash's event pages (/e/<code>) answer 403 to anything but a browser; they
+# are only linked, never fetched.
+[[source]]
+id = "oerknal"
+label = "Eetcafé Oerknal"
+adapter = "json_api"
+enabled = true
+url = "https://bash.social/oerknal"
+embedded = "next_data"
+list_path = "*"
+base_url = "https://bash.social/e/"
+default_venue = "Eetcafé Oerknal, Science Park"
+default_city = "Amsterdam"
+keep_title_contains = ["quiz"]
+force_categories = ["quiz"]
+
+[source.fields]
+title = "name"
+start = "startDate"
+url = "code"
+image = "imageUrls.lg"
+summary = "descriptionMarkdown"
+
+# Oedipus brewery's taproom in Noord: a monthly English quiz night, usually a
+# Wednesday but moved whenever the host is ill, so only the dates they publish.
+# The weticket shop is Next.js too: the whole agenda is in __NEXT_DATA__ with
+# local "YYYY-MM-DD HH:MM" times.
+[[source]]
+id = "oedipus"
+label = "Oedipus Craft Space"
+adapter = "json_api"
+enabled = true
+url = "https://oedipus.weticket.io/"
+embedded = "next_data"
+list_path = "*"
+base_url = "https://oedipus.weticket.io/"
+default_venue = "Oedipus Craft Space"
+default_city = "Amsterdam"
+keep_title_contains = ["quiz"]
+force_categories = ["quiz"]
+
+[source.fields]
+title = "name"
+start = "upcoming_date"
+end = "last_date"
+url = "slug"
+image = "cover_photo.path_url"
+
+# Brouwerij Troost, both brewpubs: a weekly Dutch and a weekly English quiz in
+# each (De Pijp NL Monday / EN Tuesday, Westergas EN Monday / NL Tuesday), and
+# a monthly themed "Pubquiz XL" at Westergas that takes the place of the
+# regular one when it falls on the same night. The agenda prints the weekly
+# ones as "Elke dinsdag, vanaf 20:00" where a date would be, which regex_cards
+# turns into one event a week; dated_replaces_weekly drops the regular quiz on
+# an XL night. The XL cards carry no clock; the detail pages all say 20:00.
+# Their nginx answers 403 to the builder's stock User-Agent (an old desktop
+# Chrome, which it seems to take for a bot) and 200 to anything else.
+[[source]]
+id = "troost"
+label = "Brouwerij Troost"
+adapter = "regex_cards"
+enabled = true
+url = "https://brouwerijtroost.nl/agenda/"
+base_url = "https://brouwerijtroost.nl"
+default_city = "Amsterdam"
+default_time = "20:00"
+dated_replaces_weekly = true
+keep_title_contains = ["quiz"]
+force_categories = ["quiz"]
+headers = { "User-Agent" = "Mozilla/5.0 (compatible; uitjes-updater; +https://uitjes.mhjansen.nl)" }
+item_pattern = '''<div class="box box-agenda-thumbnail"[^>]*>\s*<a href="(?P<url>[^"]+)"[^>]*><img src="(?P<image>[^"]+)"[^>]*></a>\s*<h4><a [^>]*>(?P<title>[^<]+)</a></h4>\s*<h5>(?P<summary>[^<]*)</h5>\s*<p>(?:(?!</p>).)*?</svg>\s*(?P<date>[^<]+?)\s*</p>\s*<p>(?:(?!</p>).)*?</svg>\s*(?P<venue>[^<]+?)\s*</p>'''
+
+[source.venue_map]
+"de pijp" = "Brouwerij Troost De Pijp"
+"westergas" = "Brouwerij Troost Westergas"
+
+# Quizitive runs the English quiz at House of Watt in Oost, once a month on a
+# Wednesday. Wix Events: the page carries each event as JSON, with the date and
+# clock as display strings. Only the Amsterdam ones are kept, so a quiz they
+# start in another city does not land here as Amsterdam.
+[[source]]
+id = "quizitive"
+label = "Quizitive"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.quizitive.nl/"
+base_url = "https://www.quizitive.nl/events/"
+default_venue = "House of Watt"
+default_city = "Amsterdam"
+keep_title_contains = ["amsterdam"]
+force_categories = ["quiz"]
+item_pattern = '''"startDateFormatted":"(?P<date>[^"]+)","startTimeFormatted":"(?P<time>[^"]+)"[^{}]*\},"title":"(?P<title>[^"]+?(?: @ (?P<venue>[^"]+))?)"(?:(?!"slug")[\s\S])*?"slug":"(?P<url>[a-z0-9-]+)"'''
+
+
+# Café Averechts in Lombok: last Saturday of the month, bilingual, money to
+# charity. The quiz site's front page caches a stale "next quiz"; its own
+# /api/quiz is the record - every date of the season, with the nights off
+# flagged {"date": ..., "noQuiz": true}. Matching only a bare {"date": ...}
+# object is what skips those.
+[[source]]
+id = "averechts"
+label = "Café Averechts"
+adapter = "regex_cards"
+enabled = true
+url = "https://averechts-pubquiz.nl/api/quiz"
+link = "https://averechts-pubquiz.nl/"
+default_title = "Pubquiz bij Café Averechts"
+default_venue = "Café Averechts, Lijsterstraat"
+default_city = "Utrecht"
+force_categories = ["quiz"]
+item_pattern = '''\{"date":"(?P<date>[^"]+)"\}'''
+
+# Stadsbrouwerij RoodNoot: two quiz series, Tim & Jeroen's themed Thursday
+# quiz and Quiz & Fun Events' Sunday-afternoon music and film quizzes, both
+# about monthly with no fixed nth-weekday. Their own events page, filtered to
+# quizzes, is server-rendered with "donderdag 29-10-2026 · 20:00" on each card.
+# Titles are the theme ("Snoepgoed"), so the quiz label comes from the source.
+[[source]]
+id = "roodnoot"
+label = "Stadsbrouwerij RoodNoot"
+adapter = "regex_cards"
+enabled = true
+url = "https://stadsbrouwerijroodnoot.nl/evenementen?categorie=quiz"
+base_url = "https://stadsbrouwerijroodnoot.nl"
+default_venue = "Stadsbrouwerij RoodNoot"
+default_city = "Utrecht"
+force_categories = ["quiz"]
+item_pattern = '''<li class="event-item">\s*<div class="event-main">\s*<span class="event-datum">[a-z]+ (?P<date>\d{2}-\d{2}-\d{4}) &middot; (?P<time>\d{1,2}:\d{2})</span>\s*<div class="event-titel-row">\s*<a href="(?P<url>[^"]+)">\s*<strong class="event-titel">(?P<title>[^<]+)</strong>(?:(?!</li>).)*?<p class="event-beschrijving">(?P<summary>[^<]*)(?:(?=(?:(?!</li>).)*?<img src="(?P<image>[^"]+)"))?'''
+
+# Café & Poppodium Stathe: quizmaster Reinier, first Tuesday of the month at
+# 20:00, all year. Wix, and the event pages are client-rendered, but the event
+# sitemap names every one as pubquiz-YYYY-MM-DD-20-00 (stathe-quiz-... before
+# 2025), months ahead. Mickey's English Pubquiz, new in 2026 and in the same
+# room, has no date in its slug - it is in quizzes.json.
+[[source]]
+id = "stathe"
+label = "Stathe"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.stathe.nl/event-pages-sitemap.xml"
+default_title = "Pubquiz bij Stathe"
+default_venue = "Stathe, Rozenstraat"
+default_city = "Utrecht"
+default_time = "20:00"
+force_categories = ["quiz"]
+item_pattern = '''<loc>(?P<url>https://www\.stathe\.nl/event-details/(?:pubquiz|stathe-quiz)-(?P<date>\d{4}-\d{2}-\d{2})-\d{2}-\d{2})</loc>'''
+
+
+# The cafés that publish nothing dated: a standing rule per quiz, from the
+# café's own page where there is one. Rules taken only from quiz listings
+# (iamsterdam.com, pubquiznederland.nl) are marked provisional and show as
+# "onbevestigd". Titles carry the café's name on purpose: a bare "Pubquiz" is
+# contained in every other quiz title that night and the fuzzy pass would
+# merge two cafés into one. Researched 2026-10-21; a rule that stops being
+# true stays on the site until someone deletes it here, so prune with care.
+[[source]]
+id = "pubquiz_manual"
+label = "Pubquizzen (curated)"
+adapter = "manual"
+enabled = true
+file = "data/manual/quizzes.json"
 
 
 # ---------------------------------------------------------------------------

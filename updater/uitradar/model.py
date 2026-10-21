@@ -12,11 +12,12 @@ from zoneinfo import ZoneInfo
 # The taxonomy the front-end filters on. Everything gets mapped into this.
 CATEGORIES = [
     "concert", "classical", "club", "theatre", "dance", "comedy", "film",
-    "festival", "market", "exhibition", "family", "talk", "sports", "other",
+    "festival", "market", "exhibition", "family", "talk", "sports", "quiz", "other",
 ]
 
 # Checked in order — first hit wins, so put the specific ones before the broad ones.
 CATEGORY_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ("quiz", ("quiz",)),
     ("market", ("vlooienmarkt", "rommelmarkt", "kringloop", "vintage", "snuffelmarkt",
                 "boekenmarkt", "platenbeurs", "braderie", "warenmarkt", "flea market",
                 "markt", "market", "beurs", "fair")),
@@ -123,7 +124,8 @@ _MONTHS_NL = {
     "aug": 8, "sep": 9, "okt": 10, "oct": 10, "nov": 11, "dec": 12, "mar": 3, "may": 5,
     "jun.": 6, "july": 7, "june": 6,
 }
-_NL_DATE = re.compile(r"(\d{1,2})\s*([a-zA-Z]{3,10})\.?\s*(\d{4})?")
+# The ordinal is for English cards: "19th of November 2026" (Brouwerij Troost).
+_NL_DATE = re.compile(r"(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s*([a-zA-Z]{3,10})\.?\s*(\d{4})?")
 # 11-09-2026 / 11.09.2026 / 11/09/2026 — day-first, the Dutch convention
 _DMY = re.compile(r"\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\b")
 _TIME = re.compile(r"\b(\d{1,2})[:.](\d{2})\b")
@@ -234,6 +236,26 @@ def parse_range(text: str | None) -> tuple[str | None, str | None, bool]:
         return start, None, all_day
     end = parse_dt(parts[1])[0] if len(parts) > 1 else None
     return start, end, all_day
+
+
+# "Elke dinsdag, vanaf 20:00" / "Weekly on Mondays, from 20:00": a standing
+# night printed where a date would be. Monday is 0, as in date.weekday().
+_WEEKDAYS = {
+    "maandag": 0, "dinsdag": 1, "woensdag": 2, "donderdag": 3, "vrijdag": 4,
+    "zaterdag": 5, "zondag": 6, "monday": 0, "tuesday": 1, "wednesday": 2,
+    "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6,
+}
+_WEEKLY = re.compile(r"\b(?:elke|iedere|every|weekly on)\s+([a-z]+?)s?\b", re.I)
+
+
+def parse_weekly(text: str | None) -> tuple[int, str | None] | None:
+    """(weekday, "HH:MM" or None) for a weekly rule, None for anything else."""
+    match = _WEEKLY.search(text or "")
+    if not match or match.group(1).lower() not in _WEEKDAYS:
+        return None
+    clock = _TIME.search(text)
+    return (_WEEKDAYS[match.group(1).lower()],
+            f"{int(clock.group(1)):02d}:{clock.group(2)}" if clock else None)
 
 
 def day_of(iso: str | None) -> str | None:

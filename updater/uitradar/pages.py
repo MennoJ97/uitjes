@@ -67,7 +67,8 @@ CATEGORY = {
     "comedy": ("comedy", "comedy"), "film": ("film", "film"),
     "festival": ("festival", "festivals"), "market": ("markt", "markten"),
     "exhibition": ("expositie", "exposities"), "family": ("familie", "familie"),
-    "talk": ("lezing", "lezingen"), "sports": ("sport", "sport"), "other": ("overig", "overig"),
+    "talk": ("lezing", "lezingen"), "sports": ("sport", "sport"), "quiz": ("quiz", "quizzen"),
+    "other": ("overig", "overig"),
 }
 
 # The most specific schema.org type for each category; the rest stay Event.
@@ -76,6 +77,7 @@ SCHEMA_TYPE = {
     "theatre": "TheaterEvent", "dance": "DanceEvent", "comedy": "ComedyEvent",
     "film": "ScreeningEvent", "festival": "Festival", "exhibition": "ExhibitionEvent",
     "family": "ChildrensEvent", "sports": "SportsEvent", "talk": "EducationEvent",
+    "quiz": "SocialEvent",
 }
 
 WEEKDAYS = ("maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag")

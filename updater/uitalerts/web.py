@@ -115,9 +115,33 @@ class App:
         if fresh:
             n = notify.baseline(self.store, row, self.events()[1], date.today())
             log(f"confirm: watch {row['id']} live, {n} existing match(es) marked seen")
+            # Off the request thread: the visitor's confirmation must not wait
+            # on, or fail with, a mail to the owner.
+            threading.Thread(target=self.tell_admin, args=(sub, row), daemon=True).start()
         return 200, {"ok": True, "watch": W.describe(W.from_row(row)),
                      "url": W.site_url(self.mailer.base, W.from_row(row)),
                      "manage": self.store.manage_token(sub)}
+
+    def tell_admin(self, sub, row) -> None:
+        """Mail the owner about a confirmed sign-up. Only confirmed ones: a
+        submitted form proves nothing (anyone can type any address), and
+        alerting on those would let a stranger fill the owner's inbox."""
+        w = W.from_row(row)
+        first = sub["confirmed_at"] == row["confirmed_at"]
+        stats = self.store.stats()
+        # Worded as the sign-up page's select offers them.
+        remind = {None: "geen", 0: "op de dag zelf", 1: "een dag van tevoren",
+                  3: "drie dagen van tevoren", 7: "een week van tevoren"}.get(w["remind_days"], "?")
+        subject = ("uitjes: nieuwe aanmelding" if first
+                   else "uitjes: bestaande abonnee volgt nog een selectie")
+        text = (f"{sub['email']} volgt nu: {W.describe(w)}\n\n"
+                f"Herinnering: {remind}. Op de site: {W.site_url(self.mailer.base, w)}\n\n"
+                f"In totaal {stats['subscribers']} abonnee(s) met {stats['watches']} melding(en).")
+        try:
+            self.mailer.admin(subject, text)
+            log(f"confirm: owner told about watch {row['id']}")
+        except Exception as exc:  # noqa: BLE001 - a lost note, never a lost sign-up
+            log(f"confirm: owner mail failed: {type(exc).__name__}: {exc}")
 
     def manage(self, body: dict):
         sub = self.store.subscriber_by_token(str(body.get("token") or ""))

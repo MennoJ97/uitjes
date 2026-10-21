@@ -38,6 +38,8 @@ class Mailer:
         self.contact = env.get("ALERTS_CONTACT") or (parseaddr(env["SMTP_FROM"])[1]
                                                      if env.get("SMTP_FROM") else "")
         self.mode = "smtp" if self.host and env.get("ALERTS_MAIL") != "outbox" else "outbox"
+        # Who hears about new sign-ups: ALERTS_ADMIN, else the contact address.
+        self.admin_to = env.get("ALERTS_ADMIN") or self.contact
         self.outbox = os.path.join(data_dir, "outbox")
 
     # -- transport ----------------------------------------------------------
@@ -75,6 +77,12 @@ class Mailer:
             if self.user:
                 server.login(self.user, self.password)
             server.send_message(msg)
+
+    def admin(self, subject: str, text: str) -> None:
+        """A plain note to the site's owner; no-op without an address."""
+        if self.admin_to:
+            self.send(self.admin_to, subject, text,
+                      _page("".join(f"<p>{_e(line)}</p>" for line in text.split("\n\n"))))
 
     # -- links --------------------------------------------------------------
     # Tokens ride in the fragment: never sent to the server, so they stay out

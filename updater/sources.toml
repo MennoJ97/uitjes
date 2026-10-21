@@ -49,6 +49,12 @@ source_drop_fraction = 0.5
 # Backstop for many sources degrading a little at once rather than one failing
 # outright: refuse if the whole agenda shrinks by more than a fifth.
 total_drop_fraction = 0.2
+# A source whose site cannot be reached (any FetchError: HTTP error, bad
+# certificate, timeout) keeps its events from the published build for this
+# many days, so one site being down no longer holds back all the others. Past
+# that its events are dropped and the build publishes without them; Bronnen
+# shows it either way. See carry_over() in build.py.
+carry_over_days = 3
 
 [filter]
 horizon_days = 120

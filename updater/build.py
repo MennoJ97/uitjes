@@ -13,13 +13,16 @@
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import sys
+from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from uitradar import pages  # noqa: E402
+from uitradar.model import Event  # noqa: E402
 from uitradar.net import Http  # noqa: E402
 from uitradar.pipeline import assemble, load_config, run_source  # noqa: E402
 
@@ -77,6 +80,53 @@ def write_pages(out_path: str, cfg: dict) -> None:
         print(f"{RED}pages not written{OFF}: {exc!r}")
 
 
+def carry_over(all_events: list, reports: list[dict], out_path: str, cfg: dict) -> list[str]:
+    """Keep the published events of a source whose site could not be reached.
+
+    Until 2026-10-21 one unreachable site held back every other source: the
+    guard refused the build, and UITagenda Utrecht serving its host's
+    placeholder certificate froze the whole agenda at the morning's build. A
+    FetchError says nothing about what the source lists, only that we could
+    not ask, so the last published copy is still the best answer for a while.
+
+    Only for FetchError (the site did not answer properly). A source that
+    answered but yielded nothing - a redesign the regexes no longer match - is
+    still the guard's business. The events come back as Event objects and go
+    through assemble() like fresh ones, so they are deduplicated and filtered
+    to the horizon again. The report gets `carried_since`, the build that
+    fetched them, which stays put while the outage lasts; after
+    carry_over_days they are dropped and the report says so (`carry_expired`).
+    Edits `all_events` and `reports` in place; returns lines for the log.
+    """
+    days = float(cfg.get("publish", {}).get("carry_over_days", 3))
+    try:
+        with open(out_path, encoding="utf-8") as fh:
+            previous = json.load(fh)
+    except (OSError, ValueError):
+        return []
+    was = {r["id"]: r for r in previous.get("sources", [])}
+    fields = {f.name for f in dataclasses.fields(Event)}
+    now, lines = datetime.now(), []
+
+    for report in reports:
+        if not str(report.get("error") or "").startswith("FetchError"):
+            continue
+        before = was.get(report["id"]) or {}
+        since = before.get("carried_since") or previous.get("generated_at")
+        mine = [ev for ev in previous.get("events", []) if ev.get("source") == report["id"]]
+        if not since or not mine:
+            continue
+        if now - datetime.fromisoformat(since) > timedelta(days=days):
+            report["carry_expired"] = since
+            lines.append(f"{report['id']}: unreachable since before {since}, "
+                         f"past {days:g} days, its {len(mine)} events dropped")
+            continue
+        all_events.extend(Event(**{k: v for k, v in ev.items() if k in fields}) for ev in mine)
+        report["carried_since"] = since
+        lines.append(f"{report['id']}: unreachable, kept {len(mine)} events from the build of {since}")
+    return lines
+
+
 def guard(dataset: dict, out_path: str, cfg: dict) -> list[str]:
     """Reasons this build should not replace the one already published.
 
@@ -84,6 +134,8 @@ def guard(dataset: dict, out_path: str, cfg: dict) -> list[str]:
     path or an unreadable previous build all publish without argument. A source
     that is newly added, or one that is now disabled on purpose, is skipped too:
     the guard is looking for a source that used to work and has gone quiet.
+    An unreachable source is carry_over()'s, not this: its kept events are
+    the old ones, and once those expire the build goes out without them.
     """
     rules = cfg.get("publish", {})
     floor = int(rules.get("min_events_to_guard", 20))
@@ -106,7 +158,7 @@ def guard(dataset: dict, out_path: str, cfg: dict) -> list[str]:
         # over: Ajax announcing five home games instead of twelve is not a bug.
         if report is None or before < floor:
             continue
-        if report.get("error") == "disabled":
+        if report.get("error") == "disabled" or report.get("carry_expired"):
             continue
         after = report.get("kept", 0)
         if after < before * source_drop:
@@ -197,9 +249,10 @@ def main() -> int:
         print(f"\n{len(all_events)} events total (unfiltered).")
         return 0
 
-    dataset = assemble(all_events, cfg, reports)
     out_path = args.out or os.path.join(ROOT, "web", "data", "events.json")
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    carried = carry_over(all_events, reports, out_path, cfg)
+    dataset = assemble(all_events, cfg, reports)
 
     counts = dataset["counts"]
     print(f"\n{GREEN}{counts['total']} events{OFF} after filtering "
@@ -218,6 +271,8 @@ def main() -> int:
     kept_lines = [r for r in reports if r["kept"] or (r["error"] and r["error"] != "disabled")]
     if kept_lines:
         print("  kept per source: " + ", ".join(f"{r['id']} {r['kept']}" for r in kept_lines))
+    for line in carried:
+        print(f"  {YEL}carried over{OFF} {line}")
 
     # Printed in full rather than counted: a merge takes an event off the site,
     # so every one of them should be readable in the log that made it. The

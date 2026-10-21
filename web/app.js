@@ -17,6 +17,8 @@ const T = {
     nothing: "Niets gevonden met deze filters.", clearAll: "Alle filters wissen",
     both: "Beide", allCats: "Alle categorieën", nCats: (n) => `${n} categorieën`, showAll: "Alles tonen",
     off: "uit", now: (n, err) => `nu ${n}: ${err}`,
+    carried: (when, err) => `onbereikbaar, toont de versie van ${when}: ${err}`,
+    expired: (when, err) => `onbereikbaar sinds ${when}, weggelaten: ${err}`,
     refused: (at, problems, built) => `Laatste poging (${at}) niet gepubliceerd: ${problems}. ` +
       `Hieronder de laatste build die wel doorkwam, van ${built}.`,
     showFilters: "Filters tonen", hideFilters: "Filters verbergen",
@@ -34,6 +36,8 @@ const T = {
     nothing: "Nothing found with these filters.", clearAll: "Clear all filters",
     both: "Both", allCats: "All categories", nCats: (n) => `${n} categories`, showAll: "Show all",
     off: "off", now: (n, err) => `now ${n}: ${err}`,
+    carried: (when, err) => `unreachable, showing the copy from ${when}: ${err}`,
+    expired: (when, err) => `unreachable since ${when}, left out: ${err}`,
     refused: (at, problems, built) => `Last attempt (${at}) not published: ${problems}. ` +
       `Below is the last build that did go through, from ${built}.`,
     showFilters: "Show filters", hideFilters: "Hide filters",
@@ -664,6 +668,7 @@ function buildSourcePanel() {
   const refused = refusedAttempt();
   const toggle = $("#sources-toggle");
 
+  if (!refused && DATA.sources.some((s) => s.carried_since)) toggle.classList.add("warn");
   if (refused) {
     toggle.classList.add("fail");
     const note = el("p", "attempt fail", T.refused(
@@ -680,7 +685,13 @@ function buildSourcePanel() {
     tr.append(el("td", "num", NUM.format(s.count)));
     tr.append(el("td", "num", NUM.format(s.kept)));
     let cls = "ok", msg = "ok";
+    // An unreachable source keeps its last published events for a few days
+    // (carry_over() in updater/build.py): amber while it does, red
+    // once they have been dropped.
+    const stamp = (iso) => new Date(iso).toLocaleString(LOCALE, STAMP);
     if (s.error === "disabled") { cls = "off"; msg = T.off; }
+    else if (s.carried_since) { cls = "warn"; msg = T.carried(stamp(s.carried_since), s.error); }
+    else if (s.carry_expired) { cls = "fail"; msg = T.expired(stamp(s.carry_expired), s.error); }
     else if (s.error) { cls = "fail"; msg = s.error; }
     // Where the refused run saw it differently, that is the news.
     const now = refused && refused.sources[s.id];

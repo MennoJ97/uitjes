@@ -201,6 +201,7 @@ class App:
                 try:
                     n = notify.announce(self.store, self.mailer, events, today, log=log, track=self.track)
                 except Exception as exc:
+                    log(f"loop: announce failed: {type(exc).__name__}: {exc}")
                     self.failed("announce", exc)
                     raise
                 log(f"loop: build {generated} checked, {n} mail(s)")
@@ -210,6 +211,7 @@ class App:
             try:
                 n = notify.remind(self.store, self.mailer, events, today, log=log, track=self.track)
             except Exception as exc:
+                log(f"loop: remind failed: {type(exc).__name__}: {exc}")
                 self.failed("remind", exc)
                 raise
             log(f"loop: reminders for {today}, {n} mail(s)")
@@ -223,10 +225,13 @@ class App:
         self.write_stats()
 
     def failed(self, kind: str, exc: Exception) -> None:
+        # The class name only: an SMTP refusal's message quotes the recipient,
+        # and last_failure is published in the dashboard JSON. The full text is
+        # in the container log, where the caller already wrote it.
         self.track("mail-failed", {"mail_failures": 1}, {"kind": kind})
         self.store.set_meta("last_failure", json.dumps({
             "at": datetime.now().astimezone().isoformat(timespec="seconds"), "kind": kind,
-            "error": f"{type(exc).__name__}: {exc}"[:200]}))
+            "error": type(exc).__name__}))
 
     def write_stats(self) -> None:
         """The dashboard card's JSON, rewritten every loop. Written beside, then

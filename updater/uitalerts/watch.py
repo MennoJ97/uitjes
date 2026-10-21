@@ -16,12 +16,15 @@ CITIES = ("Amsterdam", "Utrecht")
 REMIND_CHOICES = (0, 1, 3, 7)
 MAX_Q = 80
 _WS = re.compile(r"\s+")
+# Search text is typed by strangers and, once confirmed, shown on the owner's
+# dashboard and in Umami: letters, digits, spaces and ordinary punctuation only.
+_Q_JUNK = re.compile(r"[^\w \-.,'\u2019&/+#!?()]")
 EMAIL = re.compile(r"^[^@\s<>\"',;]{1,64}@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$")
 
 
 def normalise(raw: dict) -> dict:
     """A watch from untrusted input, or ValueError with a message for the page."""
-    q = _WS.sub(" ", str(raw.get("q") or "")).strip()[:MAX_Q]
+    q = _WS.sub(" ", _Q_JUNK.sub(" ", str(raw.get("q") or ""))).strip()[:MAX_Q]
     city = str(raw.get("city") or "all")
     city = next((c for c in CITIES if c.lower() == city.lower()), "all")
     cats_in = raw.get("cats") or []

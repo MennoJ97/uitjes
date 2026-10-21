@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="nl" data-site="uitjes">
+<html lang="<!--# echo var="uitjes_lang" -->" data-site="uitjes">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,38 +9,107 @@
      page's title and heading and include its events. Served without SSI (a
      plain file server) every branch shows; that is not a supported way to
      serve it. Indexed on purpose since 2026-10-16 (noindex before); see
-     robots.txt. -->
-<!--# if expr="$uitjes_page = amsterdam" -->
+     robots.txt.
+
+     Since 2026-10-21 every page is also in English: /en, /en/amsterdam and
+     /en/utrecht, with $uitjes_lang = en. nginx's SSI cannot nest an if, so
+     the page's copy branches on $view, language and page in one, and the
+     short labels further down are echoed from the t_* variables set per
+     language below. The events stay as the venues wrote them, in Dutch.
+     A new string goes in BOTH branches of the t_* block; app.js has its own
+     table (T) for everything it draws. -->
+<!--# set var="view" value="${uitjes_lang}-${uitjes_page}" -->
+<!--# if expr="$view = nl-amsterdam" -->
 <title>uitjes in Amsterdam — concerten, theater, comedy en meer</title>
 <meta name="description" content="Concerten, theater, comedy en festivals in Amsterdam, in één agenda uit de programma's van de zalen zelf: Paradiso, Melkweg, Concertgebouw, Carré en meer.">
-<link rel="canonical" href="https://uitjes.mhjansen.nl/amsterdam">
 <meta property="og:title" content="uitjes in Amsterdam">
-<meta property="og:url" content="https://uitjes.mhjansen.nl/amsterdam">
-<!--# elif expr="$uitjes_page = utrecht" -->
+<!--# set var="nl_path" value="/amsterdam" --><!--# set var="en_path" value="/en/amsterdam" -->
+<!--# elif expr="$view = nl-utrecht" -->
 <title>uitjes in Utrecht — concerten, theater, comedy en meer</title>
 <meta name="description" content="Concerten, theater, comedy en festivals in Utrecht, in één agenda uit de programma's van de zalen zelf: TivoliVredenburg, Stadsschouwburg en meer.">
-<link rel="canonical" href="https://uitjes.mhjansen.nl/utrecht">
 <meta property="og:title" content="uitjes in Utrecht">
-<meta property="og:url" content="https://uitjes.mhjansen.nl/utrecht">
+<!--# set var="nl_path" value="/utrecht" --><!--# set var="en_path" value="/en/utrecht" -->
+<!--# elif expr="$view = en-amsterdam" -->
+<title>uitjes in Amsterdam — concerts, theatre, comedy and more</title>
+<meta name="description" content="What's on in Amsterdam: concerts, theatre, comedy and festivals in one listing, taken from the venues' own programmes: Paradiso, Melkweg, Concertgebouw, Carré and more.">
+<meta property="og:title" content="uitjes in Amsterdam">
+<!--# set var="nl_path" value="/amsterdam" --><!--# set var="en_path" value="/en/amsterdam" -->
+<!--# elif expr="$view = en-utrecht" -->
+<title>uitjes in Utrecht — concerts, theatre, comedy and more</title>
+<meta name="description" content="What's on in Utrecht: concerts, theatre, comedy and festivals in one listing, taken from the venues' own programmes: TivoliVredenburg, Stadsschouwburg and more.">
+<meta property="og:title" content="uitjes in Utrecht">
+<!--# set var="nl_path" value="/utrecht" --><!--# set var="en_path" value="/en/utrecht" -->
+<!--# elif expr="$view = en-all" -->
+<title>uitjes — what's on in Amsterdam and Utrecht</title>
+<meta name="description" content="Concerts, theatre, festivals and markets in and around Amsterdam and Utrecht, in one listing.">
+<meta property="og:title" content="uitjes — what's on in Amsterdam and Utrecht">
+<!--# set var="nl_path" value="/" --><!--# set var="en_path" value="/en" -->
 <!--# else -->
 <title>uitjes — Amsterdam en Utrecht</title>
 <meta name="description" content="Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht, in één agenda.">
-<link rel="canonical" href="https://uitjes.mhjansen.nl/">
 <meta property="og:title" content="uitjes — Amsterdam en Utrecht">
-<meta property="og:url" content="https://uitjes.mhjansen.nl/">
+<!--# set var="nl_path" value="/" --><!--# set var="en_path" value="/en" -->
 <!--# endif -->
+<!--# if expr="$uitjes_lang = en" -->
+<!--# set var="self_path" value="$en_path" --><!--# set var="twin_path" value="$nl_path" --><!--# set var="root_path" value="/en" -->
+<!--# set var="t_other" value="Nederlands" --><!--# set var="t_other_lang" value="nl" --><!--# set var="t_other_short" value="NL" -->
+<!--# set var="t_other_label" value="Deze pagina in het Nederlands" -->
+<!--# set var="t_og_desc" value="Concerts, theatre, festivals and markets in and around Amsterdam and Utrecht. One listing, put together from the venues' own programmes." -->
+<!--# set var="t_og_alt" value="uitjes — what's on in Amsterdam and Utrecht" -->
+<!--# set var="t_locale" value="en_GB" --><!--# set var="t_locale_alt" value="nl_NL" -->
+<!--# set var="t_site_desc" value="Concerts, theatre, festivals and markets in and around Amsterdam and Utrecht, in one listing." -->
+<!--# set var="t_sources" value="Sources" -->
+<!--# set var="t_th_source" value="Source" --><!--# set var="t_th_fetched" value="Fetched" -->
+<!--# set var="t_th_used" value="Used" -->
+<!--# set var="t_search" value="Search by artist, show or venue" --><!--# set var="t_search_label" value="Search" -->
+<!--# set var="t_city" value="City" --><!--# set var="t_when" value="When" -->
+<!--# set var="t_today" value="Today" --><!--# set var="t_weekend" value="This weekend" -->
+<!--# set var="t_7" value="7 days" --><!--# set var="t_30" value="30 days" --><!--# set var="t_all" value="All" -->
+<!--# set var="t_on" value="on" --><!--# set var="t_pick_day" value="Pick one day" -->
+<!--# set var="t_clear_day" value="Clear the chosen day" -->
+<!--# set var="t_all_cats" value="All categories" --><!--# set var="t_cats" value="Categories" -->
+<!--# set var="t_hide_filters" value="Hide filters" -->
+<!--# else -->
+<!--# set var="self_path" value="$nl_path" --><!--# set var="twin_path" value="$en_path" --><!--# set var="root_path" value="/" -->
+<!--# set var="t_other" value="English" --><!--# set var="t_other_lang" value="en" --><!--# set var="t_other_short" value="EN" -->
+<!--# set var="t_other_label" value="This page in English" -->
+<!--# set var="t_og_desc" value="Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht. Eén agenda, samengesteld uit de programma's van de zalen zelf." -->
+<!--# set var="t_og_alt" value="uitjes — uitagenda Amsterdam en Utrecht" -->
+<!--# set var="t_locale" value="nl_NL" --><!--# set var="t_locale_alt" value="en_GB" -->
+<!--# set var="t_site_desc" value="Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht, in één agenda." -->
+<!--# set var="t_sources" value="Bronnen" -->
+<!--# set var="t_th_source" value="Bron" --><!--# set var="t_th_fetched" value="Opgehaald" -->
+<!--# set var="t_th_used" value="Gebruikt" -->
+<!--# set var="t_search" value="Zoek op artiest, voorstelling of zaal" --><!--# set var="t_search_label" value="Zoeken" -->
+<!--# set var="t_city" value="Stad" --><!--# set var="t_when" value="Wanneer" -->
+<!--# set var="t_today" value="Vandaag" --><!--# set var="t_weekend" value="Dit weekend" -->
+<!--# set var="t_7" value="7 dagen" --><!--# set var="t_30" value="30 dagen" --><!--# set var="t_all" value="Alles" -->
+<!--# set var="t_on" value="op" --><!--# set var="t_pick_day" value="Eén dag kiezen" -->
+<!--# set var="t_clear_day" value="Gekozen dag wissen" -->
+<!--# set var="t_all_cats" value="Alle categorieën" --><!--# set var="t_cats" value="Categorieën" -->
+<!--# set var="t_hide_filters" value="Filters verbergen" -->
+<!--# endif -->
+<link rel="canonical" href="https://uitjes.mhjansen.nl<!--# echo var="self_path" -->">
+<meta property="og:url" content="https://uitjes.mhjansen.nl<!--# echo var="self_path" -->">
+<!-- Both versions of this page, each naming the other and itself, and the
+     Dutch one as the default for every other language. The sitemap says the
+     same (uitradar/pages.py). -->
+<link rel="alternate" hreflang="nl" href="https://uitjes.mhjansen.nl<!--# echo var="nl_path" -->">
+<link rel="alternate" hreflang="en" href="https://uitjes.mhjansen.nl<!--# echo var="en_path" -->">
+<link rel="alternate" hreflang="x-default" href="https://uitjes.mhjansen.nl<!--# echo var="nl_path" -->">
 <!-- Link preview card for WhatsApp/Signal/iMessage. og.png is rendered by
      ../tools/make-og.py (a raster: SVG is not unfurled). Never the apex card:
      its wordmark reads mhjansen.nl, so the link would preview as the apex. -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="uitjes.mhjansen.nl">
-<meta property="og:description" content="Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht. Eén agenda, samengesteld uit de programma's van de zalen zelf.">
+<meta property="og:description" content="<!--# echo var="t_og_desc" -->">
 <meta property="og:image" content="https://uitjes.mhjansen.nl/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="uitjes — uitagenda Amsterdam en Utrecht">
+<meta property="og:image:alt" content="<!--# echo var="t_og_alt" -->">
 <meta name="twitter:card" content="summary_large_image">
-<meta property="og:locale" content="nl_NL">
+<meta property="og:locale" content="<!--# echo var="t_locale" -->">
+<meta property="og:locale:alternate" content="<!--# echo var="t_locale_alt" -->">
 <!-- family.css first: Helvetica, the shared greys, and this site's red via
      data-site="uitjes" above. style.css only lays the page out. -->
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
@@ -48,7 +117,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="stylesheet" href="https://mhjansen.nl/family.css">
 <script src="https://mhjansen.nl/family.js"></script>
-<link rel="stylesheet" href="/style.css?v=56e0dfe0">
+<link rel="stylesheet" href="/style.css?v=5a43c2da">
 <!-- Umami, served from this host's own /_u/ (routed by the reverse proxy): no
      cookies, no stored IP. data-exclude-search because app.js rewrites the query
      on every keystroke; the filters are reported as a "filter" event instead.
@@ -62,8 +131,8 @@
      instead of the bare host). -->
 <script type="application/ld+json">
 {"@context": "https://schema.org", "@type": "WebSite", "name": "uitjes",
- "url": "https://uitjes.mhjansen.nl/", "inLanguage": "nl",
- "description": "Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht, in één agenda."}
+ "url": "https://uitjes.mhjansen.nl<!--# echo var="root_path" -->", "inLanguage": "<!--# echo var="uitjes_lang" -->",
+ "description": "<!--# echo var="t_site_desc" encoding="none" -->"}
 </script>
 </head>
 <body>
@@ -76,7 +145,14 @@
   <div class="wrap">
     <span class="brand"><a class="apex" href="https://mhjansen.nl">mhjansen.nl</a> / <a href="/"><svg class="mark" aria-hidden="true" focusable="false" viewBox="0 0 36 22"><rect width="36" height="22" style="fill:var(--uitjes)"/><g style="fill:var(--bg)"><circle cx="11" cy="0" r="3.2"/><circle cx="11" cy="22" r="3.2"/><rect x="3.5" y="5" width="4" height="12"/><rect x="15" y="5" width="16" height="2.2"/><rect x="15" y="10" width="13" height="2.2"/><rect x="15" y="15" width="13" height="2.2"/></g><line x1="11" y1="4.5" x2="11" y2="17.5" stroke-width="1.4" stroke-dasharray="2 2" style="stroke:var(--bg)"/></svg>uitjes</a></span>
     <span class="nav-end">
-      <button class="link" id="sources-toggle" aria-expanded="false" aria-controls="sources-panel">Bronnen</button>
+      <button class="link" id="sources-toggle" aria-expanded="false" aria-controls="sources-panel"><!--# echo var="t_sources" --></button>
+      <!-- The same page in the other language, named in that language. app.js
+           keeps its query in step with the filters and remembers the choice
+           in a cookie, which nginx then honours on the next visit. -->
+      <a class="lang-switch" id="lang-switch" href="<!--# echo var="twin_path" --><!--# echo var="is_args" default="" --><!--# echo var="args" default="" -->"
+         lang="<!--# echo var="t_other_lang" -->" hreflang="<!--# echo var="t_other_lang" -->"
+         data-lang="<!--# echo var="t_other_lang" -->" title="<!--# echo var="t_other_label" -->"
+         aria-label="<!--# echo var="t_other" -->" data-short="<!--# echo var="t_other_short" -->"><span><!--# echo var="t_other" --></span></a>
       <button class="theme-toggle" hidden></button>
     </span>
   </div>
@@ -85,23 +161,38 @@
 <section class="sources-panel" id="sources-panel" hidden>
   <div class="wrap">
     <table id="sources-table">
-      <thead><tr><th>Bron</th><th>Adapter</th><th class="num">Opgehaald</th><th class="num">Gebruikt</th><th>Status</th></tr></thead>
+      <thead><tr><th><!--# echo var="t_th_source" --></th><th>Adapter</th><th class="num"><!--# echo var="t_th_fetched" --></th><th class="num"><!--# echo var="t_th_used" --></th><th>Status</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
 </section>
 
 <header class="intro wrap">
-<!--# if expr="$uitjes_page = amsterdam" -->
+<!--# if expr="$view = nl-amsterdam" -->
   <h1>uitjes in Amsterdam</h1>
   <p class="tagline">Concerten, theater, comedy, festivals en markten in en rond Amsterdam, in één agenda
     uit de programma's van de zalen zelf. Ook: <a href="/utrecht">Utrecht</a>,
     of <a href="/">beide steden</a>.</p>
-<!--# elif expr="$uitjes_page = utrecht" -->
+<!--# elif expr="$view = nl-utrecht" -->
   <h1>uitjes in Utrecht</h1>
   <p class="tagline">Concerten, theater, comedy, festivals en markten in en rond Utrecht, in één agenda
     uit de programma's van de zalen zelf. Ook: <a href="/amsterdam">Amsterdam</a>,
     of <a href="/">beide steden</a>.</p>
+<!--# elif expr="$view = en-amsterdam" -->
+  <h1>uitjes in Amsterdam</h1>
+  <p class="tagline">Concerts, theatre, comedy, festivals and markets in and around Amsterdam, in one listing
+    taken from the venues' own programmes. Also: <a href="/en/utrecht">Utrecht</a>,
+    or <a href="/en">both cities</a>.</p>
+<!--# elif expr="$view = en-utrecht" -->
+  <h1>uitjes in Utrecht</h1>
+  <p class="tagline">Concerts, theatre, comedy, festivals and markets in and around Utrecht, in one listing
+    taken from the venues' own programmes. Also: <a href="/en/amsterdam">Amsterdam</a>,
+    or <a href="/en">both cities</a>.</p>
+<!--# elif expr="$view = en-all" -->
+  <h1>uitjes</h1>
+  <p class="tagline">Concerts, theatre, festivals and markets in and around Amsterdam and Utrecht, in one listing
+    taken from the venues' own programmes. By city: <a href="/en/amsterdam">Amsterdam</a>,
+    <a href="/en/utrecht">Utrecht</a>.</p>
 <!--# else -->
   <h1>uitjes</h1>
   <p class="tagline">Concerten, theater, festivals en markten in en rond Amsterdam en Utrecht, in één agenda
@@ -114,30 +205,30 @@
   <div class="wrap">
     <div id="filter-rows">
       <div class="row">
-        <input type="search" id="q" placeholder="Zoek op artiest, voorstelling of zaal" aria-label="Zoeken" autocomplete="off" spellcheck="false">
-        <div class="seg" id="cities" role="group" aria-label="Stad"></div>
-        <div class="seg" id="when" role="group" aria-label="Wanneer">
-          <button data-range="today">Vandaag</button>
-          <button data-range="weekend">Dit weekend</button>
-          <button data-range="7">7 dagen</button>
-          <button data-range="30">30 dagen</button>
-          <button data-range="all" class="on">Alles</button>
+        <input type="search" id="q" placeholder="<!--# echo var="t_search" -->" aria-label="<!--# echo var="t_search_label" -->" autocomplete="off" spellcheck="false">
+        <div class="seg" id="cities" role="group" aria-label="<!--# echo var="t_city" -->"></div>
+        <div class="seg" id="when" role="group" aria-label="<!--# echo var="t_when" -->">
+          <button data-range="today"><!--# echo var="t_today" --></button>
+          <button data-range="weekend"><!--# echo var="t_weekend" --></button>
+          <button data-range="7"><!--# echo var="t_7" --></button>
+          <button data-range="30"><!--# echo var="t_30" --></button>
+          <button data-range="all" class="on"><!--# echo var="t_all" --></button>
         </div>
         <div class="onday">
-          <label for="date">op</label>
-          <input type="date" id="date" aria-label="Eén dag kiezen">
-          <button type="button" id="date-clear" hidden aria-label="Gekozen dag wissen">&times;</button>
+          <label for="date"><!--# echo var="t_on" --></label>
+          <input type="date" id="date" aria-label="<!--# echo var="t_pick_day" -->">
+          <button type="button" id="date-clear" hidden aria-label="<!--# echo var="t_clear_day" -->">&times;</button>
         </div>
         <details class="catpick" id="catpick">
-          <summary id="cats-summary">Alle categorieën</summary>
-          <div class="catmenu" id="cats" role="group" aria-label="Categorieën"></div>
+          <summary id="cats-summary"><!--# echo var="t_all_cats" --></summary>
+          <div class="catmenu" id="cats" role="group" aria-label="<!--# echo var="t_cats" -->"></div>
         </details>
       </div>
     </div>
     <!-- Always visible, even when the controls are collapsed: it says what is
          applied, and the toggle has to stay reachable. -->
     <div class="bar-head">
-      <button class="link toggle" id="filters-toggle" aria-expanded="true" aria-controls="filter-rows">Filters verbergen</button>
+      <button class="link toggle" id="filters-toggle" aria-expanded="true" aria-controls="filter-rows"><!--# echo var="t_hide_filters" --></button>
       <p class="tally" id="tally"></p>
     </div>
   </div>
@@ -147,18 +238,27 @@
      (uitradar/pages.py) in the same markup app.js draws. app.js replaces it
      with the full agenda once events.json is in. -->
 <main class="wrap" id="results" aria-live="polite">
+<!--# if expr="$uitjes_lang = en" -->
+<!--# include virtual="/data/pages/en/${uitjes_page}.html" stub="none" -->
+<!--# else -->
 <!--# include virtual="/data/pages/${uitjes_page}.html" stub="none" -->
+<!--# endif -->
 </main>
 
 <footer class="wrap">
   <p id="footnote"></p>
+<!--# if expr="$uitjes_lang = en" -->
+  <p class="note">Titles and descriptions are as the venues publish them, mostly in Dutch.</p>
+  <p class="note">Events marked <span class="flag">unconfirmed</span> come from recurring dates entered by hand and have not been checked with the organiser.</p>
+<!--# else -->
   <p class="note">Uitjes gemarkeerd als <span class="flag">onbevestigd</span> komen uit handmatig ingevoerde herhalingen en zijn niet gecontroleerd bij de organisator.</p>
+<!--# endif -->
 </footer>
 
 <!-- Event JSON-LD for the same events. Outside #results on purpose: Google
      reads structured data from the rendered page, after app.js has emptied
      #results. -->
 <!--# include virtual="/data/pages/${uitjes_page}.ld.html" stub="none" -->
-<script src="/app.js?v=3e652dd3"></script>
+<script src="/app.js?v=33fd156e"></script>
 </body>
 </html>

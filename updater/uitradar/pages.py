@@ -19,8 +19,13 @@ the next few weeks as static markup next to events.json:
   data/.pages-state.json   what that date is based on (nginx never serves
                            dotfiles).
 
-Pages are "all" (/) and one per city in CITY_PAGES. The page copy (titles,
-headings) is hand-written in web/index.html; this only writes events.
+Pages are "all" (/) and one per city in CITY_PAGES, each in Dutch and, under
+/en, in English (since 2026-10-21): data/pages/en/<page>.html is the same
+markup with the English labels of LANG["en"]. The events themselves stay as
+the venues wrote them, in Dutch. The JSON-LD is written once and included by
+both languages, and the sitemap lists every page with its hreflang
+alternates. The page copy (titles, headings) is hand-written in
+web/index.html; this only writes events.
 
 Why the JSON-LD is lean: Google's Event rich results need one page per event
 ("Each event MUST have a unique URL (a leaf page)"), and as of the docs dated
@@ -86,6 +91,49 @@ MONTHS = ("januari", "februari", "maart", "april", "mei", "juni", "juli", "augus
 MONTHS_SHORT = ("jan.", "feb.", "mrt.", "apr.", "mei", "jun.", "jul.", "aug.", "sep.",
                 "okt.", "nov.", "dec.")
 
+# Every word the fragments put around an event, per language. The Dutch
+# CATEGORY above stays its own name: uitalerts matches watches against it.
+# English is British, as en-GB in app.js, down to its "Sept".
+LANG = {
+    "nl": {
+        "category": CATEGORY, "weekdays": WEEKDAYS, "months": MONTHS, "months_short": MONTHS_SHORT,
+        "all_day": "hele dag", "until": "t/m", "unconfirmed": "onbevestigd",
+        "running": "doorlopend", "event": ("uitje", "uitjes"), "show": "tonen",
+        "note": ("Hierboven de komende {days} dagen. Met JavaScript aan toont deze pagina de "
+                 "hele agenda, {horizon} dagen vooruit, en kun je filteren op stad, datum en "
+                 "soort uitje."),
+    },
+    "en": {
+        "category": {
+            "concert": ("concert", "concerts"), "classical": ("classical", "classical"),
+            "club": ("club", "club"), "theatre": ("theatre", "theatre"), "dance": ("dance", "dance"),
+            "comedy": ("comedy", "comedy"), "film": ("film", "film"),
+            "festival": ("festival", "festivals"), "market": ("market", "markets"),
+            "exhibition": ("exhibition", "exhibitions"), "family": ("family", "family"),
+            "talk": ("talk", "talks"), "sports": ("sport", "sport"), "quiz": ("quiz", "quizzes"),
+            "other": ("other", "other"),
+        },
+        "weekdays": ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"),
+        "months": ("January", "February", "March", "April", "May", "June", "July", "August",
+                   "September", "October", "November", "December"),
+        "months_short": ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct",
+                         "Nov", "Dec"),
+        "all_day": "all day", "until": "until", "unconfirmed": "unconfirmed",
+        "running": "ongoing", "event": ("event", "events"), "show": "show",
+        "note": ("Above: the next {days} days. With JavaScript on, this page shows the whole "
+                 "listing, {horizon} days ahead, and lets you filter by city, date and kind "
+                 "of event."),
+    },
+}
+# Where each language's pages live: Dutch at the root, English under /en.
+LANG_PREFIX = {"nl": "", "en": "/en"}
+
+
+def lang_path(lang: str, path: str) -> str:
+    """"/" and "/amsterdam" in a language: /en and /en/amsterdam for English."""
+    prefix = LANG_PREFIX[lang]
+    return (prefix + ("" if path == "/" else path)) if prefix else path
+
 # A run longer than this is a season, an exhibition or a competition rather
 # than an event someone goes to on a date ("Spot de strik en win!", 60 days).
 MAX_RUN_DAYS = 14
@@ -107,7 +155,7 @@ def _day(iso: str) -> date:
 
 # --- HTML, mirroring row(), runsBlock() and render() in app.js ---------------
 
-def _row(ev: dict) -> str:
+def _row(ev: dict, t: dict) -> str:
     parts = []
     if ev.get("url"):
         parts.append(f'<a class="event" href="{_e(ev["url"])}" target="_blank" '
@@ -115,7 +163,7 @@ def _row(ev: dict) -> str:
     else:
         parts.append('<a class="event" href="#">')
     if ev.get("all_day") or len(ev["start"]) <= 10:
-        parts.append('<div class="time allday">hele dag</div>')
+        parts.append(f'<div class="time allday">{t["all_day"]}</div>')
     else:
         parts.append(f'<div class="time">{ev["start"][11:16]}</div>')
 
@@ -123,39 +171,39 @@ def _row(ev: dict) -> str:
     where = [w for w in (ev.get("venue"), ev.get("city")) if w]
     if ev.get("end") and ev["end"][:10] != ev["start"][:10]:
         end = _day(ev["end"])
-        where.append(f"t/m {end.day} {MONTHS_SHORT[end.month - 1]}")
+        where.append(f"{t['until']} {end.day} {t['months_short'][end.month - 1]}")
     if where:
         parts.append(f'<p class="meta">{_e(" · ".join(where))}</p>')
     if ev.get("summary"):
         parts.append(f'<p class="summary">{_e(ev["summary"])}</p>')
-    bits = [CATEGORY.get(c, (c,))[0] for c in ev.get("categories", [])]
+    bits = [t["category"].get(c, (c,))[0] for c in ev.get("categories", [])]
     if ev.get("price"):
         bits.append(ev["price"])
     bits.append("via " + (ev.get("source_label") or ev.get("source", "")))
-    flag = ' · <span class="flag">onbevestigd</span>' if ev.get("provisional") else ""
+    flag = f' · <span class="flag">{t["unconfirmed"]}</span>' if ev.get("provisional") else ""
     parts.append(f'<p class="sub">{_e(" · ".join(bits))}{flag}</p></div></a>')
     # No image: app.js fades its thumbnails in on load, and a no-script reader
     # gains nothing from a hundred hotlinked pictures but weight.
     return "".join(parts)
 
 
-def _runs(evs: list[dict]) -> str:
+def _runs(evs: list[dict], t: dict) -> str:
     by_cat = Counter((ev.get("categories") or ["other"])[0] for ev in evs)
-    what = ", ".join(f"{n} {CATEGORY.get(c, (c, c))[0 if n == 1 else 1]}"
+    what = ", ".join(f"{n} {t['category'].get(c, (c, c))[0 if n == 1 else 1]}"
                      for c, n in by_cat.most_common())
     n = len(evs)
-    return ('<details class="runs"><summary><span class="time">doorlopend</span>'
-            f'<span class="what"><b>{n} {"uitje" if n == 1 else "uitjes"}</b>'
-            f'<span>: {_e(what)}</span></span><span class="more">tonen</span></summary>'
-            + "".join(_row(ev) for ev in evs) + "</details>")
+    return (f'<details class="runs"><summary><span class="time">{t["running"]}</span>'
+            f'<span class="what"><b>{n} {t["event"][0 if n == 1 else 1]}</b>'
+            f'<span>: {_e(what)}</span></span><span class="more">{t["show"]}</span></summary>'
+            + "".join(_row(ev, t) for ev in evs) + "</details>")
 
 
-def _day_head(day: date, today: date) -> str:
+def _day_head(day: date, today: date, t: dict) -> str:
     # No "vandaag"/"morgen" as app.js writes: this file is written at 06:20,
     # 13:20 and 20:20, and is read until the next run, past midnight.
-    month = MONTHS[day.month - 1] + ("" if day.year == today.year else f" {day.year}")
+    month = t["months"][day.month - 1] + ("" if day.year == today.year else f" {day.year}")
     return (f'<h2 class="dayhead"><span class="num">{day.day}</span>'
-            f'<span class="wd">{WEEKDAYS[day.weekday()]}</span>'
+            f'<span class="wd">{t["weekdays"][day.weekday()]}</span>'
             f'<span class="mo">{month}</span></h2>')
 
 
@@ -242,8 +290,10 @@ def _script(items: list[dict]) -> str:
 # --- one page -----------------------------------------------------------------
 
 def render_page(events: list[dict], today: date, labels: dict, aggregators: set,
-                horizon_days: int, budget: int = BUDGET) -> tuple[str, str, int, int]:
+                horizon_days: int, budget: int = BUDGET,
+                lang: str = "nl") -> tuple[str, str, int, int]:
     """(markup, JSON-LD script, days shown, events shown) for one page's events."""
+    t = LANG[lang]
     upcoming = [ev for ev in events if _day(ev.get("end") or ev["start"]) >= today]
     by_day: dict[date, list[dict]] = {}
     for ev in upcoming:
@@ -257,9 +307,9 @@ def render_page(events: list[dict], today: date, labels: dict, aggregators: set,
         evs = by_day[day]
         running = [ev for ev in evs if _day(ev["start"]) < day]
         starting = [ev for ev in evs if _day(ev["start"]) >= day]
-        block = (f'<section class="daygroup">{_day_head(day, today)}<div class="day-list">'
-                 + (_runs(running) if running else "")
-                 + "".join(_row(ev) for ev in starting) + "</div></section>")
+        block = (f'<section class="daygroup">{_day_head(day, today, t)}<div class="day-list">'
+                 + (_runs(running, t) if running else "")
+                 + "".join(_row(ev, t) for ev in starting) + "</div></section>")
         day_items = [i for i in (_jsonld(ev, labels, aggregators) for ev in evs) if i]
         weight = len(block.encode()) + len(_script(day_items).encode())
         if days and (day - today).days >= MIN_DAYS and size + weight > budget:
@@ -270,9 +320,7 @@ def render_page(events: list[dict], today: date, labels: dict, aggregators: set,
         days = (day - today).days + 1
         shown += len(evs)
 
-    note = (f'<p class="static-note">Hierboven de komende {days} dagen. Met JavaScript aan '
-            f'toont deze pagina de hele agenda, {horizon_days} dagen vooruit, en kun je '
-            f'filteren op stad, datum en soort uitje.</p>')
+    note = f'<p class="static-note">{t["note"].format(days=days, horizon=horizon_days)}</p>'
     return "\n".join(chunks) + "\n" + note + "\n", _script(items) + "\n", days, shown
 
 
@@ -327,14 +375,22 @@ def _lastmod(state_path: str, hashes: dict[str, str], today: date) -> dict[str, 
 
 
 def _sitemap(lastmod: dict[str, str | None]) -> str:
+    # Each page once per language, every one listing all its versions, itself
+    # included (Google ignores alternates that are not confirmed both ways).
+    # Both languages show the same events, so they share a lastmod.
     rows = []
     for page, (path, _city) in PAGES.items():
         stamp = f"<lastmod>{lastmod[page]}</lastmod>" if lastmod.get(page) else ""
-        rows.append(f"  <url><loc>{SITE}{path}</loc>{stamp}</url>")
+        alts = "".join(f'\n    <xhtml:link rel="alternate" hreflang="{hl}" '
+                       f'href="{SITE}{lang_path(lang, path)}"/>'
+                       for hl, lang in (*((lg, lg) for lg in LANG), ("x-default", "nl")))
+        for lang in LANG:
+            rows.append(f"  <url><loc>{SITE}{lang_path(lang, path)}</loc>{stamp}{alts}\n  </url>")
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
             "<!-- Written by uitjes-updater (uitradar/pages.py) on every run; do not edit.\n"
             "     lastmod = the day that page's events last changed. -->\n"
-            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n'
+            '        xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'
             + "\n".join(rows) + "\n</urlset>\n")
 
 
@@ -347,7 +403,7 @@ def publish(dataset: dict, out_dir: str, cfg: dict, today: date | None = None) -
     events = dataset.get("events") or []
     horizon = int(dataset.get("horizon_days") or 0)
 
-    os.makedirs(os.path.join(out_dir, "pages"), exist_ok=True)
+    os.makedirs(os.path.join(out_dir, "pages", "en"), exist_ok=True)
     hashes, lines = {}, []
     for page, (path, city) in PAGES.items():
         mine = [ev for ev in events if city is None or ev.get("city") == city]
@@ -355,8 +411,14 @@ def publish(dataset: dict, out_dir: str, cfg: dict, today: date | None = None) -
         markup, script, days, shown = render_page(mine, today, labels, aggregators, horizon)
         _write_if_changed(os.path.join(out_dir, "pages", f"{page}.html"), markup)
         _write_if_changed(os.path.join(out_dir, "pages", f"{page}.ld.html"), script)
+        # English: budgeted on its own (its labels are about as long, so it
+        # comes out at about the same days), and no JSON-LD of its own: the
+        # /en pages include the Dutch .ld.html.
+        markup_en = render_page(mine, today, labels, aggregators, horizon, lang="en")[0]
+        _write_if_changed(os.path.join(out_dir, "pages", "en", f"{page}.html"), markup_en)
         lines.append(f"{path} {shown} events over {days} days, "
-                     f"{(len(markup.encode()) + len(script.encode())) // 1024} KB")
+                     f"{(len(markup.encode()) + len(script.encode())) // 1024} KB "
+                     f"(+ {len(markup_en.encode()) // 1024} KB in English)")
 
     lastmod = _lastmod(os.path.join(out_dir, ".pages-state.json"), hashes, today)
     _write_if_changed(os.path.join(out_dir, "sitemap.xml"), _sitemap(lastmod))

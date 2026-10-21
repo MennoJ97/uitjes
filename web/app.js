@@ -1,14 +1,68 @@
 /* uitjes front-end — no dependencies, reads data/events.json */
 
+/* Dutch at /, English under /en (since 2026-10-21). index.html sets <html lang>
+   per path with SSI and holds its own labels; everything this file draws comes
+   from T below. The events are as the venues wrote them, in Dutch, in both. */
+const LANG = /^en\b/.test(document.documentElement.lang) ? "en" : "nl";
+const OTHER_LANG = LANG === "en" ? "nl" : "en";
+const LOCALE = LANG === "en" ? "en-GB" : "nl-NL";
+
+const T = {
+  nl: {
+    today: "vandaag", tomorrow: "morgen",
+    of: (n, total) => `${n} van ${total}`,
+    follow: "Volg deze selectie",
+    allDay: "hele dag", until: "t/m", unconfirmed: "onbevestigd",
+    running: "doorlopend", events: (n) => (n === 1 ? "uitje" : "uitjes"), show: "tonen", hide: "verbergen",
+    nothing: "Niets gevonden met deze filters.", clearAll: "Alle filters wissen",
+    both: "Beide", allCats: "Alle categorieën", nCats: (n) => `${n} categorieën`, showAll: "Alles tonen",
+    off: "uit", now: (n, err) => `nu ${n}: ${err}`,
+    refused: (at, problems, built) => `Laatste poging (${at}) niet gepubliceerd: ${problems}. ` +
+      `Hieronder de laatste build die wel doorkwam, van ${built}.`,
+    showFilters: "Filters tonen", hideFilters: "Filters verbergen",
+    footnote: (total, live, days, when) => `${total} uitjes uit ${live} ${live === 1 ? "bron" : "bronnen"}, ` +
+      `${days} dagen vooruit. Bijgewerkt ${when}.`,
+    heldBack: " Nieuwere builds zijn tegengehouden, zie Bronnen.",
+    loadFail: (err) => `De volledige agenda kon niet worden geladen, de filters werken daardoor niet. (${err})`,
+  },
+  en: {
+    today: "today", tomorrow: "tomorrow",
+    of: (n, total) => `${n} of ${total}`,
+    follow: "Follow this selection",
+    allDay: "all day", until: "until", unconfirmed: "unconfirmed",
+    running: "ongoing", events: (n) => (n === 1 ? "event" : "events"), show: "show", hide: "hide",
+    nothing: "Nothing found with these filters.", clearAll: "Clear all filters",
+    both: "Both", allCats: "All categories", nCats: (n) => `${n} categories`, showAll: "Show all",
+    off: "off", now: (n, err) => `now ${n}: ${err}`,
+    refused: (at, problems, built) => `Last attempt (${at}) not published: ${problems}. ` +
+      `Below is the last build that did go through, from ${built}.`,
+    showFilters: "Show filters", hideFilters: "Hide filters",
+    footnote: (total, live, days, when) => `${total} events from ${live} ${live === 1 ? "source" : "sources"}, ` +
+      `${days} days ahead. Updated ${when}.`,
+    heldBack: " Newer builds have been held back, see Sources.",
+    loadFail: (err) => `The full listing could not be loaded, so the filters do not work. (${err})`,
+  },
+}[LANG];
+
 /* Category keys are the data's (English, from the builder); what people see is
-   Dutch. Plural for the filter menu, singular for the line under an event. */
-const CATEGORY = {
+   in the page's language. Plural for the filter menu, singular for the line
+   under an event. The Dutch labels mirror CATEGORY in uitradar/pages.py, which
+   the mail alerts match against. */
+const CATEGORY_NL = {
   concert: ["Concerten", "concert"], classical: ["Klassiek", "klassiek"], club: ["Club", "club"],
   theatre: ["Theater", "theater"], dance: ["Dans", "dans"], comedy: ["Comedy", "comedy"],
   film: ["Film", "film"], festival: ["Festivals", "festival"], market: ["Markten", "markt"],
   exhibition: ["Exposities", "expositie"], family: ["Familie", "familie"], talk: ["Lezingen", "lezing"],
   sports: ["Sport", "sport"], quiz: ["Quizzen", "quiz"], other: ["Overig", "overig"],
 };
+const CATEGORY_EN = {
+  concert: ["Concerts", "concert"], classical: ["Classical", "classical"], club: ["Club", "club"],
+  theatre: ["Theatre", "theatre"], dance: ["Dance", "dance"], comedy: ["Comedy", "comedy"],
+  film: ["Film", "film"], festival: ["Festivals", "festival"], market: ["Markets", "market"],
+  exhibition: ["Exhibitions", "exhibition"], family: ["Family", "family"], talk: ["Talks", "talk"],
+  sports: ["Sport", "sport"], quiz: ["Quizzes", "quiz"], other: ["Other", "other"],
+};
+const CATEGORY = LANG === "en" ? CATEGORY_EN : CATEGORY_NL;
 const catPlural = (c) => (CATEGORY[c] || [c])[0];
 const catSingular = (c) => (CATEGORY[c] || [c, c])[1];
 
@@ -20,8 +74,14 @@ const state = { q: "", city: "all", cats: new Set(), range: "all", date: null };
    and choosing a city moves the address to its page. Keys are the paths, in
    step with that nginx regex and CITY_PAGES in uitradar/pages.py. */
 const CITY_PAGES = { amsterdam: "Amsterdam", utrecht: "Utrecht" };
-const PAGE_PATHS = new Set(["/", ...Object.keys(CITY_PAGES).map((c) => "/" + c)]);
 const cityPath = (city) => (city !== "all" && CITY_PAGES[city.toLowerCase()] ? "/" + city.toLowerCase() : null);
+/* Each of those again under /en, as lang_path() in uitradar/pages.py spells it:
+   "/" is /en, "/amsterdam" is /en/amsterdam. BASE_PATH is this page's path
+   with the language taken off. */
+const langPath = (lang, path) => (lang === "en" ? "/en" + (path === "/" ? "" : path) : path);
+const PAGE_PATHS = new Set(["nl", "en"].flatMap((lang) =>
+  ["/", ...Object.keys(CITY_PAGES).map((c) => "/" + c)].map((p) => langPath(lang, p))));
+const BASE_PATH = location.pathname.replace(/^\/en(?=\/|$)/, "") || "/";
 let DATA = { events: [], sources: [], counts: {}, generated_at: null };
 
 const $ = (sel) => document.querySelector(sel);
@@ -31,7 +91,7 @@ const el = (tag, cls, text) => {
   if (text != null) node.textContent = text;
   return node;
 };
-const NUM = new Intl.NumberFormat("nl-NL");
+const NUM = new Intl.NumberFormat(LOCALE);
 
 /* ---------- dates ---------- */
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -77,10 +137,10 @@ function inRange(ev) {
   return start <= to && end >= from;   // any overlap with the window counts
 }
 
-const LONG_FMT = new Intl.DateTimeFormat("nl-NL", { weekday: "long", day: "numeric", month: "long" });
-const UNTIL_FMT = new Intl.DateTimeFormat("nl-NL", { day: "numeric", month: "short" });
-const WEEKDAY = new Intl.DateTimeFormat("nl-NL", { weekday: "long" });
-const MONTH = new Intl.DateTimeFormat("nl-NL", { month: "long" });
+const LONG_FMT = new Intl.DateTimeFormat(LOCALE, { weekday: "long", day: "numeric", month: "long" });
+const UNTIL_FMT = new Intl.DateTimeFormat(LOCALE, { day: "numeric", month: "short" });
+const WEEKDAY = new Intl.DateTimeFormat(LOCALE, { weekday: "long" });
+const MONTH = new Intl.DateTimeFormat(LOCALE, { month: "long" });
 
 /** The pieces of the date column: "vandaag" / 18 / vrijdag / september. */
 function dayParts(key) {
@@ -88,7 +148,7 @@ function dayParts(key) {
   const diff = Math.round((d - TODAY) / 86400000);
   const month = MONTH.format(d) + (d.getFullYear() === TODAY.getFullYear() ? "" : " " + d.getFullYear());
   return {
-    rel: diff === 0 ? "vandaag" : diff === 1 ? "morgen" : null,
+    rel: diff === 0 ? T.today : diff === 1 ? T.tomorrow : null,
     num: String(d.getDate()),
     wd: WEEKDAY.format(d),
     mo: month,
@@ -101,12 +161,13 @@ function matches(ev) {
   if (state.cats.size && !ev.categories.some((c) => state.cats.has(c))) return false;
   if (!inRange(ev)) return false;
   if (state.q) {
-    // Dutch labels in the haystack too, so "theater" or "markt" finds what the
-    // data files under theatre and market. `search` is words the card does not
-    // show (a long description, a merged duplicate's title): "ghibli" finds
-    // Ziggo Dome's Joe Hisaishi night, whose title never says it.
+    // Both languages' labels in the haystack too, so "theater" or "markt" finds
+    // what the data files under theatre and market, on either page. `search` is
+    // words the card does not show (a long description, a merged duplicate's
+    // title): "ghibli" finds Ziggo Dome's Joe Hisaishi night, whose title never
+    // says it.
     const hay = [ev.title, ev.venue, ev.city, ev.summary, ev.search, ...ev.categories,
-                 ...ev.categories.map(catPlural), ...ev.categories.map(catSingular)]
+                 ...ev.categories.flatMap((c) => [...(CATEGORY_NL[c] || []), ...(CATEGORY_EN[c] || [])])]
       .filter(Boolean).join(" ").toLowerCase();
     if (!state.q.split(/\s+/).every((t) => hay.includes(t))) return false;
   }
@@ -137,7 +198,7 @@ function readUrlState() {
   qRaw = (p.get("q") || "").trim();
   state.q = qRaw.toLowerCase();
 
-  const pageCity = CITY_PAGES[location.pathname.slice(1)];
+  const pageCity = CITY_PAGES[BASE_PATH.slice(1)];
   if (pageCity) state.city = pageCity;
 
   // Everything below is checked against what this build actually contains, so
@@ -169,7 +230,7 @@ function writeUrlState() {
   // On the site the city is the path. Anywhere else (a local file server, say)
   // there is only the one page, and the city stays a parameter.
   const onSite = PAGE_PATHS.has(location.pathname);
-  const path = onSite ? cityPath(state.city) || "/" : location.pathname;
+  const path = onSite ? langPath(LANG, cityPath(state.city) || "/") : location.pathname;
 
   const p = new URLSearchParams();
   if (state.q) p.set("q", qRaw || state.q);
@@ -187,6 +248,10 @@ function writeUrlState() {
   try {
     history.replaceState(null, "", path + (qs ? "?" + qs : "") + location.hash);
   } catch (e) { /* file:// and sandboxed frames refuse this; filters still work */ }
+
+  // The language switch goes to this same view in the other language.
+  const sw = $("#lang-switch");
+  if (sw && onSite) sw.href = langPath(OTHER_LANG, cityPath(state.city) || "/") + (qs ? "?" + qs : "");
 }
 
 /** What the "when" control currently says, in words. */
@@ -203,7 +268,7 @@ function writeTally(n) {
   tally.replaceChildren();
   if (!DATA.events.length) return;
 
-  tally.append(document.createTextNode(`${NUM.format(n)} van ${NUM.format(DATA.events.length)}`));
+  tally.append(document.createTextNode(T.of(NUM.format(n), NUM.format(DATA.events.length))));
 
   const active = [];
   if (state.city !== "all") active.push(state.city);
@@ -237,7 +302,7 @@ function writeAlertLink() {
     return;
   }
   if (!a) {
-    a = el("a", "alert-link", "Volg deze selectie");
+    a = el("a", "alert-link", T.follow);
     a.id = "alert-link";
     // The bell is drawn, not the emoji: an emoji renders as a full-colour
     // yellow bell on most devices, and this site is greys plus one accent.
@@ -268,7 +333,7 @@ function row(ev) {
   }
 
   a.append(ev.all_day || ev.start.length <= 10
-    ? el("div", "time allday", "hele dag")
+    ? el("div", "time allday", T.allDay)
     : el("div", "time", ev.start.slice(11, 16)));
 
   const body = el("div");
@@ -277,7 +342,7 @@ function row(ev) {
   // Where, and until when for a run.
   const where = [ev.venue, ev.city].filter(Boolean);
   if (ev.end && dayKey(ev.end) !== dayKey(ev.start)) {
-    where.push("t/m " + UNTIL_FMT.format(asDate(ev.end)));
+    where.push(T.until + " " + UNTIL_FMT.format(asDate(ev.end)));
   }
   if (where.length) body.append(el("p", "meta", where.join(" · ")));
   if (ev.summary) body.append(el("p", "summary", ev.summary));
@@ -291,7 +356,7 @@ function row(ev) {
   sub.append(document.createTextNode(bits.join(" · ")));
   if (ev.provisional) {
     sub.append(document.createTextNode(" · "));
-    sub.append(el("span", "flag", "onbevestigd"));
+    sub.append(el("span", "flag", T.unconfirmed));
   }
   body.append(sub);
   a.append(body);
@@ -317,7 +382,7 @@ function row(ev) {
 function runsBlock(evs) {
   const box = el("details", "runs");
   const sum = el("summary");
-  sum.append(el("span", "time", "doorlopend"));
+  sum.append(el("span", "time", T.running));
 
   const byCat = new Map();
   evs.forEach((ev) => { const c = ev.categories[0] || "other"; byCat.set(c, (byCat.get(c) || 0) + 1); });
@@ -325,12 +390,12 @@ function runsBlock(evs) {
     .map(([c, n]) => `${n} ${(n === 1 ? catSingular(c) : catPlural(c)).toLowerCase()}`);
 
   const what = el("span", "what");
-  what.append(el("b", null, `${NUM.format(evs.length)} ${evs.length === 1 ? "uitje" : "uitjes"}`));
+  what.append(el("b", null, `${NUM.format(evs.length)} ${T.events(evs.length)}`));
   what.append(el("span", null, ": " + parts.join(", ")));
   sum.append(what);
-  sum.append(el("span", "more", "tonen"));
+  sum.append(el("span", "more", T.show));
   box.addEventListener("toggle", () => {
-    sum.querySelector(".more").textContent = box.open ? "verbergen" : "tonen";
+    sum.querySelector(".more").textContent = box.open ? T.hide : T.show;
   });
   box.append(sum);
   evs.forEach((ev) => box.append(row(ev)));
@@ -340,7 +405,7 @@ function runsBlock(evs) {
 function resetFilters() {
   // The defaults are the bare front page, so this is all of it. Not just
   // clearing the query: on /amsterdam that would keep the city.
-  if (PAGE_PATHS.has(location.pathname)) location.href = "/";
+  if (PAGE_PATHS.has(location.pathname)) location.href = langPath(LANG, "/");
   else location.search = "";
 }
 
@@ -406,8 +471,8 @@ function render() {
   writeAlertLink();
 
   if (!hits.length) {
-    const p = el("p", "empty", "Niets gevonden met deze filters.");
-    const b = el("button", "link", "Alle filters wissen");
+    const p = el("p", "empty", T.nothing);
+    const b = el("button", "link", T.clearAll);
     b.addEventListener("click", resetFilters);
     p.append(b);
     results.append(p);
@@ -450,7 +515,7 @@ function render() {
 function buildControls() {
   const cityBox = $("#cities");
   ["all", ...(DATA.cities || [])].forEach((name) => {
-    const b = el("button", name === state.city ? "on" : null, name === "all" ? "Beide" : name);
+    const b = el("button", name === state.city ? "on" : null, name === "all" ? T.both : name);
     b.addEventListener("click", () => {
       state.city = name;
       [...cityBox.children].forEach((c) => c.classList.toggle("on", c === b));
@@ -535,8 +600,8 @@ function buildCategoryMenu() {
 
   const summarise = () => {
     const n = state.cats.size;
-    $("#cats-summary").textContent = n === 0 ? "Alle categorieën"
-      : n === 1 ? catPlural([...state.cats][0]) : `${n} categorieën`;
+    $("#cats-summary").textContent = n === 0 ? T.allCats
+      : n === 1 ? catPlural([...state.cats][0]) : T.nCats(n);
     pick.classList.toggle("on", n > 0);
   };
 
@@ -559,7 +624,7 @@ function buildCategoryMenu() {
     });
 
   const foot = el("div", "foot");
-  const clear = el("button", "link", "Alles tonen");
+  const clear = el("button", "link", T.showAll);
   clear.type = "button";
   clear.addEventListener("click", () => {
     state.cats.clear();
@@ -600,11 +665,9 @@ function buildSourcePanel() {
 
   if (refused) {
     toggle.classList.add("fail");
-    const note = el("p", "attempt fail",
-      `Laatste poging (${new Date(refused.at).toLocaleString("nl-NL", STAMP)}) niet gepubliceerd: ` +
-      refused.problems.join("; ") +
-      `. Hieronder de laatste build die wel doorkwam, van ` +
-      `${new Date(DATA.generated_at).toLocaleString("nl-NL", STAMP)}.`);
+    const note = el("p", "attempt fail", T.refused(
+      new Date(refused.at).toLocaleString(LOCALE, STAMP), refused.problems.join("; "),
+      new Date(DATA.generated_at).toLocaleString(LOCALE, STAMP)));
     $("#sources-table").before(note);
   }
 
@@ -616,12 +679,12 @@ function buildSourcePanel() {
     tr.append(el("td", "num", NUM.format(s.count)));
     tr.append(el("td", "num", NUM.format(s.kept)));
     let cls = "ok", msg = "ok";
-    if (s.error === "disabled") { cls = "off"; msg = "uit"; }
+    if (s.error === "disabled") { cls = "off"; msg = T.off; }
     else if (s.error) { cls = "fail"; msg = s.error; }
     // Where the refused run saw it differently, that is the news.
     const now = refused && refused.sources[s.id];
     if (now && now.error && now.error !== "disabled") {
-      cls = "fail"; msg = `nu ${NUM.format(now.kept)}: ${now.error}`;
+      cls = "fail"; msg = T.now(NUM.format(now.kept), now.error);
     }
     tr.append(el("td", cls, msg));
     body.append(tr);
@@ -643,7 +706,7 @@ const COLLAPSE_KEY = "uitradar.filters.collapsed";
 function setCollapsed(on, remember) {
   $("#filters").classList.toggle("collapsed", on);
   $("#filters-toggle").setAttribute("aria-expanded", String(!on));
-  $("#filters-toggle").textContent = on ? "Filters tonen" : "Filters verbergen";
+  $("#filters-toggle").textContent = on ? T.showFilters : T.hideFilters;
   if (remember) {
     try { localStorage.setItem(COLLAPSE_KEY, on ? "1" : "0"); } catch (e) { /* private mode */ }
   }
@@ -683,8 +746,24 @@ function trackBarHeight() {
   window.addEventListener("resize", applyBarHeight);
 }
 
-/* ---------- boot ---------- */
-fetch("data/events.json", { cache: "no-store" })
+/* ---------- language switch ----------
+   A plain link to the other language (index.html writes it, writeUrlState()
+   keeps its query in step). Following it also stores the choice, and nginx
+   (nginx/default.conf) sends a later visit to a page in the other
+   language on to this one's twin: a Dutch link opened by someone who chose
+   English lands in English. A cookie rather than localStorage because nginx
+   has to read it; this host's only, unlike family.js's theme. */
+$("#lang-switch")?.addEventListener("click", (e) => {
+  try {
+    document.cookie = `uitjes_lang=${e.currentTarget.dataset.lang}; Max-Age=31536000; Path=/; SameSite=Lax` +
+      (location.protocol === "https:" ? "; Secure" : "");
+  } catch (err) { /* cookies off: the link still works, it just is not remembered */ }
+});
+
+/* ---------- boot ----------
+   From the root on the site: relative, /en/amsterdam would ask for
+   /en/data/events.json. Relative anywhere else, so a local copy still works. */
+fetch((PAGE_PATHS.has(location.pathname) ? "/" : "") + "data/events.json", { cache: "no-store" })
   .then((r) => r.json())
   .then((data) => {
     DATA = data;
@@ -698,13 +777,11 @@ fetch("data/events.json", { cache: "no-store" })
     const when = new Date(data.generated_at);
     const live = data.sources.filter((s) => s.kept > 0).length;
     $("#footnote").textContent =
-      `${NUM.format(data.counts.total)} uitjes uit ${live} ${live === 1 ? "bron" : "bronnen"}, ` +
-      `${data.horizon_days} dagen vooruit. Bijgewerkt ${when.toLocaleString("nl-NL", STAMP)}.` +
-      (refusedAttempt() ? " Nieuwere builds zijn tegengehouden, zie Bronnen." : "");
+      T.footnote(NUM.format(data.counts.total), live, data.horizon_days, when.toLocaleString(LOCALE, STAMP)) +
+      (refusedAttempt() ? T.heldBack : "");
   })
   .catch((err) => {
     // Whatever the server put in the HTML stays: the next few weeks, without
     // the filters. Say so above it rather than replacing it.
-    $("#results").prepend(el("p", "empty",
-      "De volledige agenda kon niet worden geladen, de filters werken daardoor niet. (" + err + ")"));
+    $("#results").prepend(el("p", "empty", T.loadFail(err)));
   });

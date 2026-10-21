@@ -34,8 +34,19 @@ a { color: inherit; }
 .brand a { text-decoration: none; }
 .brand .apex { color: var(--muted); font-weight: 400; }
 .brand .apex:hover { color: var(--ink); }
-/* Bronnen and the light/dark switch, together at the right end. */
+/* Bronnen, the language switch and the light/dark switch, together at the right end. */
 .nav-end { display: flex; align-items: baseline; gap: 1.5rem; }
+/* "English" / "Nederlands": a link to the other language, quiet like Bronnen. */
+.lang-switch { color: var(--muted); text-decoration: none; padding-bottom: .15rem;
+  border-bottom: 2px solid transparent; }
+.lang-switch:hover { color: var(--ink); border-bottom-color: var(--accent); }
+/* A phone has no room for "Nederlands" beside Bronnen and the theme switch:
+   the code instead, with the full name kept as the link's aria-label. */
+@media (max-width: 480px) {
+  .nav-end { gap: 1rem; }
+  .lang-switch span { display: none; }
+  .lang-switch::after { content: attr(data-short); }
+}
 
 /* A text-looking button: the sources toggle, the filters toggle, "wis". */
 button.link { font: inherit; background: none; border: 0; padding: 0 0 .15rem; cursor: pointer;

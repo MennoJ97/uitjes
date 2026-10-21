@@ -36,10 +36,11 @@ a { color: inherit; }
 .brand .apex:hover { color: var(--ink); }
 /* Bronnen, the language switch and the light/dark switch, together at the right end. */
 .nav-end { display: flex; align-items: baseline; gap: 1.5rem; }
-/* "English" / "Nederlands": a link to the other language, quiet like Bronnen. */
-.lang-switch { color: var(--muted); text-decoration: none; padding-bottom: .15rem;
+/* "English" / "Nederlands": a link to the other language, quiet like Bronnen.
+   .nav-link is the same look for "Agenda" on the alerts page. */
+.lang-switch, .nav-link { color: var(--muted); text-decoration: none; padding-bottom: .15rem;
   border-bottom: 2px solid transparent; }
-.lang-switch:hover { color: var(--ink); border-bottom-color: var(--accent); }
+.lang-switch:hover, .nav-link:hover { color: var(--ink); border-bottom-color: var(--accent); }
 /* A phone has no room for "Nederlands" beside Bronnen and the theme switch:
    the code instead, with the full name kept as the link's aria-label. */
 @media (max-width: 480px) {
@@ -201,6 +202,11 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: .92em; background
    currentColor, so it follows the text in both themes. */
 svg.bell { width: 1em; height: 1em; vertical-align: -0.14em; margin-right: .3em; }
 .alerts { padding-block: .5rem 3rem; }
+/* "← Terug naar de agenda", above the alerts page's heading. */
+.intro .back { margin: 0 0 .6rem; font-size: .875rem; }
+.intro .back a { color: var(--muted); text-decoration: none; }
+.intro .back a:hover { color: var(--ink); text-decoration: underline 1px; text-decoration-color: var(--accent);
+  text-underline-offset: .2em; }
 .alerts > * { max-width: 42rem; }
 .alerts fieldset { border: 0; border-top: 1px solid var(--line); margin: 0 0 1.25rem; padding: 1rem 0 0; }
 .alerts legend { font-weight: 700; padding: 0 .5rem 0 0; }

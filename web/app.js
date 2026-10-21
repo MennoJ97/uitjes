@@ -282,8 +282,9 @@ function writeTally(n) {
   tally.append(el("span", "active", active.join(" · ")));
 }
 
-/* "Volg deze selectie": mail alerts for the view on screen. meldingen.html takes the same q/city/cat
-   parameters as this page, so the link hands the filters over as they are.
+/* "Volg deze selectie": mail alerts for the view on screen. meldingen.html (/meldingen, or
+   /en/alerts in English) takes the same q/city/cat parameters as this page,
+   so the link hands the filters over as they are.
    Only for a view with a search or a category - a city alone is the whole
    agenda, which the alerts service refuses as a watch. Shown once the service
    says it really sends mail (/api/alerts/info); until the mailbox exists it
@@ -313,7 +314,7 @@ function writeAlertLink() {
   if (state.q) p.set("q", qRaw || state.q);
   if (state.city !== "all") p.set("city", state.city);
   if (state.cats.size) p.set("cat", [...state.cats].sort().join(","));
-  a.href = "/meldingen?" + p.toString().replace(/%2C/g, ",");
+  a.href = (LANG === "en" ? "/en/alerts?" : "/meldingen?") + p.toString().replace(/%2C/g, ",");
 }
 
 /* ---------- rendering ---------- */

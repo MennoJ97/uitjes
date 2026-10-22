@@ -16,6 +16,7 @@ import os
 import smtplib
 import ssl
 from datetime import datetime
+from email import policy
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid, parseaddr
 
@@ -23,6 +24,10 @@ from . import watch as W
 
 ACCENT = "#5E6A00"  # --uitjes in mhjansen.nl/family.css
 PER_WATCH = 25      # events listed per watch in one mail; the rest is a link
+# The default policy folds at 78 columns, and a header with no spaces to fold
+# at (List-Unsubscribe's URL) becomes RFC 2047 encoded-words, which Gmail and
+# Outlook do not decode - no unsubscribe button. 998 is RFC 5322's hard limit.
+POLICY = policy.default.clone(max_line_length=998)
 
 
 class Mailer:
@@ -45,7 +50,7 @@ class Mailer:
     # -- transport ----------------------------------------------------------
     def send(self, to: str, subject: str, text: str, body_html: str,
              unsubscribe: str | None = None) -> None:
-        msg = EmailMessage()
+        msg = EmailMessage(policy=POLICY)
         msg["From"] = self.sender
         msg["To"] = to
         msg["Subject"] = subject

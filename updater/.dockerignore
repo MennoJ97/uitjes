@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.DS_Store
+# Never bake a local HTTP cache into the image; in the container it is a mount.
+data/cache/

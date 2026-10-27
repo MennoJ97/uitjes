@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.DS_Store
+._*
+# The builder's on-disk HTTP cache: a local --probe fills it with fetched pages.
+updater/data/cache/

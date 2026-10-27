@@ -75,3 +75,7 @@ generic adapter (`json_api`, `jsonld`, `regex_cards`, `ics`, `rss`, `tribe`,
 `weeztix`, …). The comments in that file record what each source needed and why.
 Venues that publish nothing machine-readable can be entered as rules in
 `updater/data/manual/`.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Event data belongs to the venues and agendas it comes from.

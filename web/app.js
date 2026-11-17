@@ -12,7 +12,7 @@ const T = {
     today: "vandaag", tomorrow: "morgen",
     of: (n, total) => `${n} van ${total}`,
     follow: "Volg deze selectie", free: "gratis",
-    allDay: "hele dag", until: "t/m", unconfirmed: "onbevestigd",
+    allDay: "hele dag", timeUnknown: "tijd onbekend", until: "t/m", unconfirmed: "onbevestigd",
     running: "doorlopend", events: (n) => (n === 1 ? "uitje" : "uitjes"), show: "tonen", hide: "verbergen",
     nothing: "Niets gevonden met deze filters.", clearAll: "Alle filters wissen",
     both: "Beide", allCats: "Alle categorieën", nCats: (n) => `${n} categorieën`, showAll: "Alles tonen",
@@ -31,7 +31,7 @@ const T = {
     today: "today", tomorrow: "tomorrow",
     of: (n, total) => `${n} of ${total}`,
     follow: "Follow this selection", free: "free",
-    allDay: "all day", until: "until", unconfirmed: "unconfirmed",
+    allDay: "all day", timeUnknown: "time unknown", until: "until", unconfirmed: "unconfirmed",
     running: "ongoing", events: (n) => (n === 1 ? "event" : "events"), show: "show", hide: "hide",
     nothing: "Nothing found with these filters.", clearAll: "Clear all filters",
     both: "Both", allCats: "All categories", nCats: (n) => `${n} categories`, showAll: "Show all",
@@ -345,8 +345,11 @@ function row(ev) {
     if (ev.city) a.dataset.umamiEventCity = ev.city;
   }
 
-  a.append(ev.all_day || ev.start.length <= 10
-    ? el("div", "time allday", T.allDay)
+  // "hele dag" only for what runs all day (a market, an exhibition); a night
+  // the source gave no clock for says so instead (time_unknown, set by the
+  // builder in uitradar/pipeline.py).
+  a.append(ev.time_unknown ? el("div", "time allday", T.timeUnknown)
+    : ev.all_day || ev.start.length <= 10 ? el("div", "time allday", T.allDay)
     : el("div", "time", ev.start.slice(11, 16)));
 
   const body = el("div");

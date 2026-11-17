@@ -97,7 +97,7 @@ MONTHS_SHORT = ("jan.", "feb.", "mrt.", "apr.", "mei", "jun.", "jul.", "aug.", "
 LANG = {
     "nl": {
         "category": CATEGORY, "weekdays": WEEKDAYS, "months": MONTHS, "months_short": MONTHS_SHORT,
-        "all_day": "hele dag", "until": "t/m", "unconfirmed": "onbevestigd",
+        "all_day": "hele dag", "time_unknown": "tijd onbekend", "until": "t/m", "unconfirmed": "onbevestigd",
         "running": "doorlopend", "event": ("uitje", "uitjes"), "show": "tonen",
         "note": ("Hierboven de komende {days} dagen. Met JavaScript aan toont deze pagina de "
                  "hele agenda, {horizon} dagen vooruit, en kun je filteren op stad, datum en "
@@ -118,7 +118,7 @@ LANG = {
                    "September", "October", "November", "December"),
         "months_short": ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct",
                          "Nov", "Dec"),
-        "all_day": "all day", "until": "until", "unconfirmed": "unconfirmed",
+        "all_day": "all day", "time_unknown": "time unknown", "until": "until", "unconfirmed": "unconfirmed",
         "running": "ongoing", "event": ("event", "events"), "show": "show",
         "note": ("Above: the next {days} days. With JavaScript on, this page shows the whole "
                  "listing, {horizon} days ahead, and lets you filter by city, date and kind "
@@ -162,7 +162,9 @@ def _row(ev: dict, t: dict) -> str:
                      f'rel="noopener noreferrer">')
     else:
         parts.append('<a class="event" href="#">')
-    if ev.get("all_day") or len(ev["start"]) <= 10:
+    if ev.get("time_unknown"):
+        parts.append(f'<div class="time allday">{t["time_unknown"]}</div>')
+    elif ev.get("all_day") or len(ev["start"]) <= 10:
         parts.append(f'<div class="time allday">{t["all_day"]}</div>')
     else:
         parts.append(f'<div class="time">{ev["start"][11:16]}</div>')

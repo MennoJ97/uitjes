@@ -233,24 +233,35 @@ miscellaneous = "other"
 [[source]]
 id = "melkweg"
 label = "Melkweg"
-adapter = "regex_cards"
+adapter = "json_api"
 enabled = true
+# The agenda's cards print a date and no clock, so this used to publish every
+# Melkweg night as all-day. The page is Next.js, and its __NEXT_DATA__ holds
+# each event as a JSON:API record with startTime (UTC, so parse_dt converts),
+# endDate for the multi-day expos, the subtitle and the header image - all
+# 259 upcoming events on one page (2026-11-17). Records are found by shape:
+# list_path "*" takes every object on which both the title and start resolve.
 url = "https://www.melkweg.nl/nl/agenda/"
+embedded = "next_data"
+list_path = "*"
 base_url = "https://www.melkweg.nl"
 default_venue = "Melkweg"
 default_city = "Amsterdam"
-# One match per card (the card is the <a>), each field a lookahead bounded by
-# its </a>. The old sequential pattern (category span, then h3) broke on a card
-# with no type label: it took a tag span *after* the title as the category and
-# then ran into the next card for its h3 - that card's title under this card's
-# URL and date, and the next card lost (2 of 288, 2026-09-22).
-item_pattern = '''href="(?P<url>/nl/agenda/[^"]*?(?P<date>\d{2}-\d{2}-\d{4})/)"[^>]*>(?=(?:(?!</a>).)*?<h3[^>]*>(?P<title>[^<]+)</h3>)(?:(?=(?:(?!</a>).)*?type-item[^>]*><span>(?P<category>[^<]{0,30})</span>))?'''
+
+[source.fields]
+title = "attributes.name"
+start = "attributes.startTime"
+end = "attributes.endDate"
+url = "attributes.url"
+image = "attributes.media.featuredImage[0].filename"
+summary = "attributes.subtitle"
+category = "attributes.profile"
 
 [source.category_map]
-club = "club"
+clubnacht = "club"
 concert = "concert"
 festival = "festival"
-expo = "exhibition"
+expositie = "exhibition"
 film = "film"
 theater = "theatre"
 

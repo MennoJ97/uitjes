@@ -9,6 +9,23 @@ from datetime import date, datetime, timedelta
 from .adapters import REGISTRY
 from .model import OPENMIC_WORDS, Event, day_of, search_text, slugify, within_horizon
 
+
+def _time_unknown(ev: Event, spec: dict) -> bool:
+    """A single day with no clock: the start time is just not in the data.
+
+    A run over several days (an exhibition, a festival week) is all-day by
+    nature, and the page folds it into "doorlopend". A one-day entry without
+    a clock is nearly always a night whose time the source did not publish:
+    measured 2026-11-17, every one of them was (Pothuys, AFAS Live before
+    announcing, uitamsterdam's buurthuis listings). Telling the two apart by
+    category does not work - uitamsterdam's inferred "market" covered a soup
+    lunch and an IDFA screening. A source whose clockless entries really are
+    all-day events says so with `no_time_means = "all_day"`.
+    """
+    if not ev.all_day or spec.get("no_time_means") == "all_day":
+        return False
+    return not (ev.end and ev.end[:10] != ev.start[:10])
+
 # Words that carry no identity in a title. The canonical city names are added
 # to this at run time from filter.cities, so "Guus Meeuwis in Amsterdam" and
 # "Guus Meeuwis" come out as the same set without naming Amsterdam here.
@@ -120,6 +137,7 @@ def run_source(spec: dict, http, root: str) -> tuple[list[Event], dict]:
         if (any(w in ev.title.lower() for w in OPENMIC_WORDS)
                 and "openmic" not in ev.categories):
             ev.categories = ["openmic"] + [c for c in ev.categories if c != "other"]
+        ev.time_unknown = _time_unknown(ev, spec)
     report["count"] = len(events)
     report["seconds"] = round(time.time() - started, 2)
     return events, report
@@ -190,7 +208,10 @@ def assemble(all_events: list[Event], cfg: dict, reports: list[dict]) -> dict:
     for row in merges:
         kept_per_source[row["dropped_source"]] -= 1
 
-    events = sorted(kept.values(), key=lambda e: (e.start, slugify(e.title)))
+    # Within a day: all-day first (a bare date sorts before any clock), then by
+    # time, and the nights whose time is not known yet last.
+    events = sorted(kept.values(),
+                    key=lambda e: (e.start[:10], e.time_unknown, e.start, slugify(e.title)))
     for rep in reports:
         rep["kept"] = kept_per_source.get(rep["id"], 0)
 
@@ -204,6 +225,7 @@ def assemble(all_events: list[Event], cfg: dict, reports: list[dict]) -> dict:
             "by_category": dict(Counter(c for e in events for c in e.categories)),
             # The page shows its Gratis toggle only when this is non-zero.
             "free": sum(e.free for e in events),
+            "time_unknown": sum(e.time_unknown for e in events),
         },
         "sources": reports,
         # Kept in the output rather than only logged: it is the record of what

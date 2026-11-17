@@ -302,6 +302,12 @@ class Event:
     # Free to get in, read off `price` by is_free(). What the page's
     # Gratis/Free filter shows; left out of the JSON when false.
     free: bool = False
+    # A date the source gives without a clock, for something that does not
+    # run all day: Melkweg used to, Pothuys always does, AFAS Live before the
+    # times are announced. all_day stays true (there is no clock to show), and
+    # this says why; the page reads it as "tijd onbekend" rather than "hele dag".
+    # Set by pipeline.run_source, left out of the JSON when false.
+    time_unknown: bool = False
     # True for hand-entered recurrences whose exact dates were never confirmed
     # against the organiser — the UI badges these so they aren't read as fact.
     provisional: bool = False
@@ -335,8 +341,9 @@ class Event:
         out = asdict(self)
         if not out["search"]:
             del out["search"]
-        if not out["free"]:
-            del out["free"]
+        for flag in ("free", "time_unknown"):
+            if not out[flag]:
+                del out[flag]
         return out
 
 

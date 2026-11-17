@@ -119,7 +119,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="stylesheet" href="https://mhjansen.nl/family.css">
 <script src="https://mhjansen.nl/family.js"></script>
-<link rel="stylesheet" href="/style.css?v=5b3efe0e">
+<link rel="stylesheet" href="/style.css?v=9dc0389a">
 <!-- Umami, served from this host's own /_u/ (routed by the reverse proxy): no
      cookies, no stored IP. data-exclude-search because app.js rewrites the query
      on every keystroke; the filters are reported as a "filter" event instead.
@@ -233,6 +233,9 @@
     <div class="bar-head">
       <button class="link toggle" id="filters-toggle" aria-expanded="true" aria-controls="filter-rows"><!--# echo var="t_hide_filters" --></button>
       <p class="tally" id="tally"></p>
+      <!-- Shown by app.js while any filter is on. After the tally, so its
+           coming and going moves nothing to its left. -->
+      <button type="button" class="link clear" id="clear-filters" hidden></button>
     </div>
   </div>
 </nav>
@@ -262,6 +265,6 @@
      reads structured data from the rendered page, after app.js has emptied
      #results. -->
 <!--# include virtual="/data/pages/${uitjes_page}.ld.html" stub="none" -->
-<script src="/app.js?v=5cd2308d"></script>
+<script src="/app.js?v=5e427f20"></script>
 </body>
 </html>

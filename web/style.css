@@ -137,10 +137,13 @@ button.link.warn, button.link.warn:hover { color: var(--warn); }
 .catmenu .foot { border-top: 1px solid var(--line); margin-top: .35rem; padding: .4rem .9rem 0; font-size: .8125rem; }
 
 /* The status line under the controls; the only line left when collapsed. */
-.bar-head { display: flex; align-items: baseline; gap: .9rem; min-width: 0; margin-top: .45rem;
-  font-size: .8125rem; color: var(--muted); }
+/* Wraps rather than squeezing the tally to nothing: on a phone, with "Volg deze
+   selectie" and "Filters wissen" both showing, the links move to a second
+   line, right-aligned, and the tally keeps room to say what is filtered. */
+.bar-head { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline;
+  gap: .35rem .9rem; min-width: 0; margin-top: .45rem; font-size: .8125rem; color: var(--muted); }
 .filters.collapsed .bar-head { margin-top: 0; }
-.bar-head .tally { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.bar-head .tally { flex: 1; min-width: min(13rem, 60%); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-variant-numeric: tabular-nums; }
 .tally .active { color: var(--ink); font-weight: 700; }
 .filters.collapsed #filter-rows { display: none; }
@@ -213,6 +216,7 @@ footer p { font-size: .8125rem; color: var(--muted); margin: 0 0 .4rem; }
 code { font-family: ui-monospace, Menlo, monospace; font-size: .92em; background: var(--accent-soft); padding: 1px 5px; }
 
 /* ---- mail alerts: the agenda's link to them, and meldingen.html ---- */
+.bar-head .clear { flex: none; color: var(--ink); border-bottom-color: var(--accent); white-space: nowrap; }
 .bar-head .alert-link { flex: none; color: var(--ink); text-decoration: none;
   border-bottom: 1px solid var(--accent); }
 /* The bell before "Volg deze selectie", on the link and on the page's button;

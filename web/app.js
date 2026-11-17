@@ -14,7 +14,7 @@ const T = {
     follow: "Volg deze selectie", free: "gratis",
     allDay: "hele dag", timeUnknown: "tijd onbekend", until: "t/m", unconfirmed: "onbevestigd",
     running: "doorlopend", events: (n) => (n === 1 ? "uitje" : "uitjes"), show: "tonen", hide: "verbergen",
-    nothing: "Niets gevonden met deze filters.", clearAll: "Alle filters wissen",
+    nothing: "Niets gevonden met deze filters.", clearAll: "Alle filters wissen", clear: "Filters wissen",
     both: "Beide", allCats: "Alle categorieën", nCats: (n) => `${n} categorieën`, showAll: "Alles tonen",
     off: "uit", now: (n, err) => `nu ${n}: ${err}`,
     carried: (when, err) => `onbereikbaar, toont de versie van ${when}: ${err}`,
@@ -33,7 +33,7 @@ const T = {
     follow: "Follow this selection", free: "free",
     allDay: "all day", timeUnknown: "time unknown", until: "until", unconfirmed: "unconfirmed",
     running: "ongoing", events: (n) => (n === 1 ? "event" : "events"), show: "show", hide: "hide",
-    nothing: "Nothing found with these filters.", clearAll: "Clear all filters",
+    nothing: "Nothing found with these filters.", clearAll: "Clear all filters", clear: "Clear filters",
     both: "Both", allCats: "All categories", nCats: (n) => `${n} categories`, showAll: "Show all",
     off: "off", now: (n, err) => `now ${n}: ${err}`,
     carried: (when, err) => `unreachable, showing the copy from ${when}: ${err}`,
@@ -421,12 +421,31 @@ function runsBlock(evs) {
   return box;
 }
 
-function resetFilters() {
-  // The defaults are the bare front page, so this is all of it. Not just
-  // clearing the query: on /amsterdam that would keep the city.
-  if (PAGE_PATHS.has(location.pathname)) location.href = langPath(LANG, "/");
-  else location.search = "";
+/** Every filter back to its default, in place: the controls, the state and,
+    through render(), the URL. On a city page that includes the city, as the
+    tally lists it among the filters. Used by the bar's "Filters wissen" and
+    by the link under an empty result. */
+function clearFilters() {
+  qRaw = "";
+  Object.assign(state, { q: "", city: "all", range: "all", date: null, free: false });
+  state.cats.clear();
+  $("#q").value = "";
+  [...$("#cities").children].forEach((c, i) => c.classList.toggle("on", i === 0));
+  [...$("#when").children].forEach((c) => c.classList.toggle("on", c.dataset.range === "all"));
+  const date = $("#date");
+  date.value = "";
+  date.classList.remove("on");
+  $("#date-clear").hidden = true;
+  document.querySelectorAll("#cats input").forEach((i) => { i.checked = false; });
+  $("#cats-summary").textContent = T.allCats;
+  $("#catpick").classList.remove("on");
+  const free = $("#free");
+  if (free) { free.classList.remove("on"); free.setAttribute("aria-pressed", "false"); }
+  render();
 }
+
+const anyFilter = () => Boolean(state.q || state.city !== "all" || state.cats.size ||
+                                state.range !== "all" || state.free);
 
 /* ---------- analytics ----------
    What the filters were set to, as one Umami "filter" event once the visitor
@@ -489,11 +508,12 @@ function render() {
 
   writeTally(hits.length);
   writeAlertLink();
+  $("#clear-filters").hidden = !anyFilter();
 
   if (!hits.length) {
     const p = el("p", "empty", T.nothing);
     const b = el("button", "link", T.clearAll);
-    b.addEventListener("click", resetFilters);
+    b.addEventListener("click", clearFilters);
     p.append(b);
     results.append(p);
     applyBarHeight();
@@ -547,6 +567,10 @@ function buildControls() {
   buildCategoryMenu();
 
   // Gratis: one toggle, only offered when this build has free events at all.
+  const clear = $("#clear-filters");
+  clear.textContent = T.clear;
+  clear.addEventListener("click", clearFilters);
+
   const free = $("#free");
   if (free && DATA.counts.free) {
     free.hidden = false;

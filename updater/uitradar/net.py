@@ -30,6 +30,11 @@ class FetchError(RuntimeError):
     pass
 
 
+# Pages a site serves instead of its content while it holds visitors back.
+# CultureSuite's queue sets this in an inline script on every queue page.
+QUEUE_MARKERS = ("window.sseLocation = '/csq/queue/sse'",)
+
+
 # Worth a second go: the server said "busy" or "later", or the connection never
 # finished. Everything else — 404, 403, a 500 that means the query is wrong — is
 # an answer, and asking again just annoys someone else's server.
@@ -97,6 +102,16 @@ class Http:
         elif enc == "deflate":
             raw = zlib.decompress(raw, -zlib.MAX_WBITS)
         body = raw.decode("utf-8", errors="replace")
+
+        # A waiting room is the site saying "not now", not an empty agenda.
+        # CultureSuite sites (Frascati, Kleine Komedie, Bellevue) answer 200
+        # with a queue page during busy spells; read as a page, it matched no
+        # events, and one source at 0 held back the whole build (Frascati,
+        # 2026-11-17 13:25). As a FetchError it is an unreachable source:
+        # carry_over keeps its last events and the rest publishes. Not cached,
+        # so the next request asks again. We do not try to get through it.
+        if any(marker in body for marker in QUEUE_MARKERS):
+            raise FetchError(f"waiting-room queue page instead of content for {url}")
 
         with open(path, "w", encoding="utf-8") as fh:
             json.dump({"url": url, "ts": time.time(), "body": body}, fh)

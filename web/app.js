@@ -332,8 +332,11 @@ function writeAlertLink() {
 /* ---------- rendering ---------- */
 function row(ev) {
   const a = el("a", "event");
-  a.href = ev.url || "#";
-  if (ev.url) {
+  // The builder keeps only http(s) links (_web_url in uitradar/model.py);
+  // checked again here because this is where a link becomes clickable.
+  const url = /^https?:\/\//i.test(ev.url || "") ? ev.url : null;
+  a.href = url || "#";
+  if (url) {
     a.target = "_blank"; a.rel = "noopener noreferrer";
     // Which events people open, as an Umami "event-open" event: the tracker
     // reports clicks on anything carrying data-umami-event, with every

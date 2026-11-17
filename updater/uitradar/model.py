@@ -21,7 +21,8 @@ CATEGORIES = [
 # its open mic under comedy, a café its jam under live music), so pipeline.py
 # adds the category from the title whatever the source labelled it.
 OPENMIC_WORDS = ("open mic", "open-mic", "openmic", "open podium", "open stage",
-                 "jam session", "jamsession", "jamsessie", "jam night", "open noise")
+                 "jam session", "jamsession", "jamsessie", "jam sessie", "jam-session",
+                 "jam night", "jamnight", "open jam", "open noise")
 
 # Checked in order — first hit wins, so put the specific ones before the broad ones.
 CATEGORY_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
@@ -140,6 +141,8 @@ _NL_DATE = re.compile(r"(\d{1,2})(?:st|nd|rd|th)?\.?(?:\s+of)?\s*([a-zA-Z]{3,10}
 # 11-09-2026 / 11.09.2026 / 11/09/2026 — day-first, the Dutch convention
 _DMY = re.compile(r"\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\b")
 _TIME = re.compile(r"\b(\d{1,2})[:.](\d{2})\b")
+_COMPACT_DT = re.compile(r"(\d{8})(\d{4})")
+_RELATIVE_DAY = re.compile(r"^(vandaag|today|morgen|tomorrow)\b", re.I)
 
 
 def parse_dt(value, *, fallback_year: int | None = None) -> tuple[str | None, bool]:
@@ -153,6 +156,17 @@ def parse_dt(value, *, fallback_year: int | None = None) -> tuple[str | None, bo
     text = str(value).strip()
     if not text:
         return None, False
+    # "Vandaag, 19.00" (De Zwijger prints that instead of the date on the day
+    # itself): the word becomes the date and the clock is read after it.
+    relative = _RELATIVE_DAY.match(text)
+    if relative:
+        offset = 0 if relative.group(1).lower() in ("vandaag", "today") else 1
+        text = (date.today() + timedelta(days=offset)).isoformat() + text[relative.end():]
+    # "202611192030": Bimhuis's API has no other form, and fromisoformat would
+    # read the first eight digits as a bare date and drop the clock.
+    compact = _COMPACT_DT.fullmatch(text)
+    if compact:
+        text = f"{compact.group(1)}T{compact.group(2)}"
 
     iso = text.replace("Z", "+00:00")
     for candidate in (iso, iso.replace(" ", "T")):
@@ -320,8 +334,8 @@ class Event:
         # (`&amp;`), which stay literal when the value is assigned from JS and
         # break the request. Attributes are unescaped by a real HTML parser;
         # regex extraction has to do it here.
-        self.url = html.unescape(self.url) if self.url else None
-        self.image = html.unescape(self.image) if self.image else None
+        self.url = _web_url(html.unescape(self.url)) if self.url else None
+        self.image = _web_url(html.unescape(self.image)) if self.image else None
         self.title = clean_text(self.title) or "(untitled)"
         self.summary = clean_text(self.summary, 240)
         self.venue = clean_text(self.venue, 80)
@@ -383,6 +397,16 @@ def is_free(price: str | None) -> bool:
     amounts = _AMOUNT.findall(price)
     # Every number on it is zero: "vanaf € 0,-", "€ 0,00". Not "€ 0 - 15".
     return bool(amounts) and all(float(a.replace(",", ".")) == 0 for a in amounts)
+
+
+def _web_url(value: str) -> str | None:
+    """Only http(s). Every url and image comes from someone else's page and
+    lands in an href or src on ours (app.js, pages.py); a "javascript:" or
+    "data:" value there would run on this site. urljoin passes those through
+    untouched, so the check is here, where every source's events pass.
+    """
+    value = value.strip()
+    return value if value.lower().startswith(("https://", "http://")) else None
 
 
 def dedupe_key(ev: Event) -> str:

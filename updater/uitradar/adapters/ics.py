@@ -90,4 +90,7 @@ def _to_event(row: dict, cfg: dict, cmap: dict) -> Event | None:
                             given=[c for c in (row.get("CATEGORIES") or "").split(",") if c]),
         url=row.get("URL"),
         summary=row.get("DESCRIPTION"),
+        # A non-standard property some exporters add for the price: Events
+        # Manager writes X-RDR-COST ("10", "Donation based"). Named per source.
+        price=row.get(cfg["price_field"]) if cfg.get("price_field") else None,
     )

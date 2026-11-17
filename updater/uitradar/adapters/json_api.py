@@ -160,6 +160,10 @@ def _to_event(row, fields: dict, cfg: dict, cmap: dict, base: str) -> Event | No
             start, all_day = stamped, False
 
     href, image = get("url"), get("image")
+    # A bare numeric id (Amsterdam Alternative's events) joins onto base_url
+    # like a slug does.
+    if isinstance(href, int):
+        href = str(href)
     category = get("category")
     if isinstance(category, str):
         category = [category]

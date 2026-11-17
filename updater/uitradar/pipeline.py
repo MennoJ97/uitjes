@@ -7,6 +7,7 @@ from collections import Counter
 from datetime import date, datetime, timedelta
 
 from .adapters import REGISTRY
+from .net import FetchError
 from .model import OPENMIC_WORDS, Event, day_of, search_text, slugify, within_horizon
 
 
@@ -85,6 +86,10 @@ def run_source(spec: dict, http, root: str) -> tuple[list[Event], dict]:
         events = adapter(cfg, http) or []
     except Exception as exc:  # noqa: BLE001 - every source is allowed to fail alone
         report["error"] = f"{type(exc).__name__}: {exc}"
+        # The site did not answer properly (down, a 5xx, a queue page), as
+        # opposed to a source that broke: what build.carry_over acts on.
+        # A flag, because a subclass (QueuePageError) has its own name.
+        report["unreachable"] = isinstance(exc, FetchError)
         report["seconds"] = round(time.time() - started, 2)
         return [], report
 

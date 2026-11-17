@@ -109,7 +109,7 @@ def carry_over(all_events: list, reports: list[dict], out_path: str, cfg: dict) 
     now, lines = datetime.now(), []
 
     for report in reports:
-        if not str(report.get("error") or "").startswith("FetchError"):
+        if not report.get("unreachable"):
             continue
         before = was.get(report["id"]) or {}
         since = before.get("carried_since") or previous.get("generated_at")

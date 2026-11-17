@@ -60,7 +60,7 @@ from datetime import date, timedelta
 from urllib.parse import urljoin
 
 from ..model import Event, classify, parse_dt, parse_range, parse_weekly
-from ..net import FetchError
+from ..net import FetchError, QueuePageError
 
 _FLAGS = {"i": re.I, "s": re.S, "m": re.M, "x": re.X}
 _JSON_ESCAPE = re.compile(r"\\u([0-9a-fA-F]{4})")
@@ -102,6 +102,8 @@ def fetch(cfg: dict, http) -> list[Event]:
     for url in urls:
         try:
             body = http.get(url, headers=cfg.get("headers"), ttl=cfg.get("ttl"))
+        except QueuePageError:
+            raise
         except FetchError:
             if cfg.get("stop_on_page_error") and read_one:
                 break

@@ -30,9 +30,16 @@ class FetchError(RuntimeError):
     pass
 
 
+class QueuePageError(FetchError):
+    """A waiting room where the content should be. Never the end of a list:
+    the stop_on_page_error walks re-raise it, so a queue on page 2 makes the
+    source unreachable (carried over) instead of quietly publishing page 1."""
+
+
 # Pages a site serves instead of its content while it holds visitors back.
 # CultureSuite's queue sets this in an inline script on every queue page.
 QUEUE_MARKERS = ("window.sseLocation = '/csq/queue/sse'",)
+QUEUE_PAGE_MAX = 20_000
 
 
 # Worth a second go: the server said "busy" or "later", or the connection never
@@ -109,9 +116,15 @@ class Http:
         # events, and one source at 0 held back the whole build (Frascati,
         # 2026-11-17 13:25). As a FetchError it is an unreachable source:
         # carry_over keeps its last events and the rest publishes. Not cached,
-        # so the next request asks again. We do not try to get through it.
-        if any(marker in body for marker in QUEUE_MARKERS):
-            raise FetchError(f"waiting-room queue page instead of content for {url}")
+        # so the next build asks again; within this run the host is not asked
+        # again at all (a detail-page walk would otherwise request every page
+        # of a site that just said "not now"). Only a small body counts: the
+        # queue page is ~2 KB, an agenda is far larger, so text quoted inside
+        # real content cannot switch a source off. We do not try to get
+        # through the queue.
+        if len(body) <= QUEUE_PAGE_MAX and any(marker in body for marker in QUEUE_MARKERS):
+            self._host_failures[urllib.parse.urlsplit(url).netloc] = self.host_failure_limit
+            raise QueuePageError(f"waiting-room queue page instead of content for {url}")
 
         with open(path, "w", encoding="utf-8") as fh:
             json.dump({"url": url, "ts": time.time(), "body": body}, fh)

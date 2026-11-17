@@ -33,13 +33,13 @@ def fetch(cfg: dict, http) -> list[Event]:
     follow = cfg.get("follow")
     limit = int(cfg.get("follow_limit", 60))
     pages: list[str] = []
-    errors: list[str] = []
+    errors: list[Exception] = []
 
     for url in urls:
         try:
             body = http.get(url, ttl=cfg.get("ttl"))
         except Exception as exc:  # noqa: BLE001
-            errors.append(str(exc))
+            errors.append(exc)
             continue
         pages.append(body)
         if follow:
@@ -53,10 +53,12 @@ def fetch(cfg: dict, http) -> list[Event]:
                 try:
                     pages.append(http.get(detail, ttl=cfg.get("ttl")))
                 except Exception as exc:  # noqa: BLE001
-                    errors.append(str(exc))
+                    errors.append(exc)
 
+    # The exception itself, not its text in a RuntimeError: a FetchError (site
+    # down, queue page) is what lets carry_over keep the last published events.
     if not pages and errors:
-        raise RuntimeError(errors[0])
+        raise errors[0]
 
     cmap = {k.lower(): v for k, v in (cfg.get("category_map") or {}).items()}
     out: list[Event] = []

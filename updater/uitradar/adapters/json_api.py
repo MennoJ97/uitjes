@@ -44,7 +44,7 @@ import re
 from urllib.parse import urljoin
 
 from ..model import Event, classify, parse_dt
-from ..net import FetchError
+from ..net import FetchError, QueuePageError
 
 _NEXT_DATA = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 
@@ -92,6 +92,8 @@ def fetch(cfg: dict, http) -> list[Event]:
             url = template.replace("{page}", str(page)) if page is not None else template
             try:
                 payload = _load(http, url, cfg)
+            except QueuePageError:
+                raise
             except FetchError:
                 # Walking one page past the end is how you find the end on an
                 # API that errors instead of answering with []. Only once

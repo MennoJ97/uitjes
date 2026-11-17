@@ -7,7 +7,7 @@ from collections import Counter
 from datetime import date, datetime, timedelta
 
 from .adapters import REGISTRY
-from .model import Event, day_of, search_text, slugify, within_horizon
+from .model import OPENMIC_WORDS, Event, day_of, search_text, slugify, within_horizon
 
 # Words that carry no identity in a title. The canonical city names are added
 # to this at run time from filter.cities, so "Guus Meeuwis in Amsterdam" and
@@ -77,6 +77,13 @@ def run_source(spec: dict, http, root: str) -> tuple[list[Event], dict]:
     keep = [w.lower() for w in spec.get("keep_title_contains") or []]
     if keep:
         events = [ev for ev in events if any(w in (ev.title or "").lower() for w in keep)]
+    # The opposite, for one source: EKKO lists its online radio shows among its
+    # nights out. The global [filter] drop_title_contains is for words no
+    # source should ever publish; this is for what one venue files as an event.
+    drop = [w.lower() for w in spec.get("drop_title_contains") or []]
+    if drop:
+        events = [ev for ev in events
+                  if not any(w in (ev.title or "").lower() for w in drop)]
 
     fallback = list(spec.get("fallback_categories") or [])
     # The stronger sibling of fallback_categories, for a venue that only does
@@ -108,6 +115,11 @@ def run_source(spec: dict, http, root: str) -> tuple[list[Event], dict]:
         # Added in front rather than instead - a film quiz is still film.
         if "quiz" in ev.title.lower() and "quiz" not in ev.categories:
             ev.categories = ["quiz"] + [c for c in ev.categories if c != "other"]
+        # Same for nights you join in: Comedyhuis's "Open Mic Comedyhuis
+        # Regulars" stays comedy and becomes openmic as well.
+        if (any(w in ev.title.lower() for w in OPENMIC_WORDS)
+                and "openmic" not in ev.categories):
+            ev.categories = ["openmic"] + [c for c in ev.categories if c != "other"]
     report["count"] = len(events)
     report["seconds"] = round(time.time() - started, 2)
     return events, report
@@ -190,6 +202,8 @@ def assemble(all_events: list[Event], cfg: dict, reports: list[dict]) -> dict:
             "total": len(events),
             "by_city": dict(Counter(e.city for e in events)),
             "by_category": dict(Counter(c for e in events for c in e.categories)),
+            # The page shows its Gratis toggle only when this is non-zero.
+            "free": sum(e.free for e in events),
         },
         "sources": reports,
         # Kept in the output rather than only logged: it is the record of what

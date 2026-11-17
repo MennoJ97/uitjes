@@ -11,7 +11,7 @@ const T = {
   nl: {
     today: "vandaag", tomorrow: "morgen",
     of: (n, total) => `${n} van ${total}`,
-    follow: "Volg deze selectie",
+    follow: "Volg deze selectie", free: "gratis",
     allDay: "hele dag", until: "t/m", unconfirmed: "onbevestigd",
     running: "doorlopend", events: (n) => (n === 1 ? "uitje" : "uitjes"), show: "tonen", hide: "verbergen",
     nothing: "Niets gevonden met deze filters.", clearAll: "Alle filters wissen",
@@ -30,7 +30,7 @@ const T = {
   en: {
     today: "today", tomorrow: "tomorrow",
     of: (n, total) => `${n} of ${total}`,
-    follow: "Follow this selection",
+    follow: "Follow this selection", free: "free",
     allDay: "all day", until: "until", unconfirmed: "unconfirmed",
     running: "ongoing", events: (n) => (n === 1 ? "event" : "events"), show: "show", hide: "hide",
     nothing: "Nothing found with these filters.", clearAll: "Clear all filters",
@@ -57,20 +57,22 @@ const CATEGORY_NL = {
   theatre: ["Theater", "theater"], dance: ["Dans", "dans"], comedy: ["Comedy", "comedy"],
   film: ["Film", "film"], festival: ["Festivals", "festival"], market: ["Markten", "markt"],
   exhibition: ["Exposities", "expositie"], family: ["Familie", "familie"], talk: ["Lezingen", "lezing"],
-  sports: ["Sport", "sport"], quiz: ["Quizzen", "quiz"], other: ["Overig", "overig"],
+  sports: ["Sport", "sport"], quiz: ["Quizzen", "quiz"],
+  openmic: ["Open podia", "open podium"], other: ["Overig", "overig"],
 };
 const CATEGORY_EN = {
   concert: ["Concerts", "concert"], classical: ["Classical", "classical"], club: ["Club", "club"],
   theatre: ["Theatre", "theatre"], dance: ["Dance", "dance"], comedy: ["Comedy", "comedy"],
   film: ["Film", "film"], festival: ["Festivals", "festival"], market: ["Markets", "market"],
   exhibition: ["Exhibitions", "exhibition"], family: ["Family", "family"], talk: ["Talks", "talk"],
-  sports: ["Sport", "sport"], quiz: ["Quizzes", "quiz"], other: ["Other", "other"],
+  sports: ["Sport", "sport"], quiz: ["Quizzes", "quiz"],
+  openmic: ["Open mics", "open mic"], other: ["Other", "other"],
 };
 const CATEGORY = LANG === "en" ? CATEGORY_EN : CATEGORY_NL;
 const catPlural = (c) => (CATEGORY[c] || [c])[0];
 const catSingular = (c) => (CATEGORY[c] || [c, c])[1];
 
-const state = { q: "", city: "all", cats: new Set(), range: "all", date: null };
+const state = { q: "", city: "all", cats: new Set(), range: "all", date: null, free: false };
 
 /* /amsterdam and /utrecht are this page with one city chosen, each with its own
    title and its own events in the HTML (nginx/default.conf). The city
@@ -163,6 +165,9 @@ function dayParts(key) {
 function matches(ev) {
   if (state.city !== "all" && ev.city !== state.city) return false;
   if (state.cats.size && !ev.categories.some((c) => state.cats.has(c))) return false;
+  // `free` is decided by the builder from the price text (is_free in
+  // uitradar/model.py), so "Gratis voor jaarleden" is not a free night here.
+  if (state.free && !ev.free) return false;
   if (!inRange(ev)) return false;
   if (state.q) {
     // Both languages' labels in the haystack too, so "theater" or "markt" finds
@@ -217,6 +222,7 @@ function readUrlState() {
     const key = c.trim().toLowerCase();
     if (CATEGORY[key]) state.cats.add(key);
   });
+  state.free = p.get("free") === "1" && Boolean(DATA.counts.free);
 
   // A link naming a day that has already passed is stale rather than wrong, and
   // an empty page explains nothing — fall back to the default window.
@@ -242,6 +248,7 @@ function writeUrlState() {
   // Sorted, so the same set of categories always produces the same link
   // whatever order they were ticked in.
   if (state.cats.size) p.set("cat", [...state.cats].sort().join(","));
+  if (state.free) p.set("free", "1");
   if (state.range === "date") p.set("date", state.date);
   else if (state.range !== "all") p.set("when", state.range);
 
@@ -279,6 +286,7 @@ function writeTally(n) {
   const when = whenLabel();
   if (when) active.push(when);
   if (state.cats.size) active.push([...state.cats].map((c) => catPlural(c).toLowerCase()).join(", "));
+  if (state.free) active.push(T.free);
   if (state.q) active.push(`"${qRaw || state.q}"`);
   if (!active.length) return;
 
@@ -450,6 +458,7 @@ function trackFilters() {
     city: state.city,
     when: state.range,
     cats: [...state.cats].sort().join(",") || "none",
+    free: state.free ? "yes" : "no",
   };
   if (state.q) props.q = (qRaw || state.q).slice(0, 60);
   const key = JSON.stringify(props);
@@ -530,6 +539,15 @@ function buildControls() {
   });
 
   buildCategoryMenu();
+
+  // Gratis: one toggle, only offered when this build has free events at all.
+  const free = $("#free");
+  if (free && DATA.counts.free) {
+    free.hidden = false;
+    const show = () => { free.classList.toggle("on", state.free); free.setAttribute("aria-pressed", String(state.free)); };
+    show();
+    free.addEventListener("click", () => { state.free = !state.free; show(); render(); });
+  }
 
   const dateInput = $("#date");
   const dateClear = $("#date-clear");

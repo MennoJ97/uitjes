@@ -73,7 +73,7 @@ CATEGORY = {
     "festival": ("festival", "festivals"), "market": ("markt", "markten"),
     "exhibition": ("expositie", "exposities"), "family": ("familie", "familie"),
     "talk": ("lezing", "lezingen"), "sports": ("sport", "sport"), "quiz": ("quiz", "quizzen"),
-    "other": ("overig", "overig"),
+    "openmic": ("open podium", "open podia"), "other": ("overig", "overig"),
 }
 
 # The most specific schema.org type for each category; the rest stay Event.
@@ -82,7 +82,7 @@ SCHEMA_TYPE = {
     "theatre": "TheaterEvent", "dance": "DanceEvent", "comedy": "ComedyEvent",
     "film": "ScreeningEvent", "festival": "Festival", "exhibition": "ExhibitionEvent",
     "family": "ChildrensEvent", "sports": "SportsEvent", "talk": "EducationEvent",
-    "quiz": "SocialEvent",
+    "quiz": "SocialEvent", "openmic": "SocialEvent",
 }
 
 WEEKDAYS = ("maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag")
@@ -111,7 +111,7 @@ LANG = {
             "festival": ("festival", "festivals"), "market": ("market", "markets"),
             "exhibition": ("exhibition", "exhibitions"), "family": ("family", "family"),
             "talk": ("talk", "talks"), "sports": ("sport", "sport"), "quiz": ("quiz", "quizzes"),
-            "other": ("other", "other"),
+            "openmic": ("open mic", "open mics"), "other": ("other", "other"),
         },
         "weekdays": ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"),
         "months": ("January", "February", "March", "April", "May", "June", "July", "August",

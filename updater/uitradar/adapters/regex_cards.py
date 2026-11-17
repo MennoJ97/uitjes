@@ -8,7 +8,8 @@ Config keys:
   urls          pages to scrape (may include {page} — see pages)
   pages         optional list of values substituted into {page}
   item_pattern  regex with named groups: title, date (required),
-                url, venue, time, image, summary (optional)
+                url, venue, time, end, image, summary, category, price
+                (optional)
   flags         "is" (default) -> re.I | re.S
   base_url      for turning relative hrefs absolute
   headers       extra request headers, e.g. a User-Agent for a site that turns
@@ -19,6 +20,10 @@ Config keys:
                 is not one to send people to (an API); default the page itself
   default_time  "HH:MM" for cards that print a date and no clock, when the
                 venue states the start once for all of them
+  day_month_dates
+                the date is a bare "09.11" (day.month, no year, Het Pothuys):
+                give it this year, or next year's when that day is more than
+                60 days gone, the rule parse_dt applies to "5 jan"
   dated_replaces_weekly
                 a card whose date is a standing night ("Elke dinsdag, vanaf
                 20:00") becomes one event a week to the horizon; with this set,
@@ -34,6 +39,20 @@ from urllib.parse import urljoin
 from ..model import Event, classify, parse_dt, parse_range, parse_weekly
 
 _FLAGS = {"i": re.I, "s": re.S, "m": re.M, "x": re.X}
+_DAY_MONTH = re.compile(r"^\s*(\d{1,2})[./-](\d{1,2})\s*$")
+
+
+def _with_year(text: str | None) -> str | None:
+    """ "09.11" as "09-11-2026" (see day_month_dates); anything else as is."""
+    match = _DAY_MONTH.match(text or "")
+    if not match:
+        return text
+    day, month, today = int(match.group(1)), int(match.group(2)), date.today()
+    try:
+        year = today.year + ((today - date(today.year, month, day)).days > 60)
+    except ValueError:
+        return text
+    return f"{day:02d}-{month:02d}-{year}"
 
 
 def fetch(cfg: dict, http) -> list[Event]:
@@ -58,6 +77,8 @@ def fetch(cfg: dict, http) -> list[Event]:
         body = http.get(url, headers=cfg.get("headers"), ttl=cfg.get("ttl"))
         for match in pattern.finditer(body):
             row = {k: v for k, v in match.groupdict().items() if v}
+            if cfg.get("day_month_dates"):
+                row["date"] = _with_year(row.get("date"))
             rule = parse_weekly(row.get("date"))
             if rule:
                 weekly.extend(_card(row, when, not clock, None, cfg, cmap, base, url)
@@ -112,4 +133,7 @@ def _card(row: dict, start: str, all_day: bool, end: str | None, cfg: dict,
         url=urljoin(base, href) if href else cfg.get("link") or page,
         image=urljoin(base, row["image"]) if row.get("image") else None,
         summary=row.get("summary"),
+        # "€ 14", "Gratis", "Donation based": the page's own wording, shown
+        # as is. Also what the agenda's free filter reads (see app.js).
+        price=row.get("price"),
     )

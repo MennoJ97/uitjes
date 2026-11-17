@@ -17,7 +17,8 @@ const T = {
     category: {
       concert: "Concerten", classical: "Klassiek", club: "Club", theatre: "Theater", dance: "Dans",
       comedy: "Comedy", film: "Film", festival: "Festivals", market: "Markten", exhibition: "Exposities",
-      family: "Familie", talk: "Lezingen", sports: "Sport", quiz: "Quizzen", other: "Overig",
+      family: "Familie", talk: "Lezingen", sports: "Sport", quiz: "Quizzen", openmic: "Open podia",
+      other: "Overig",
     },
     remind: { 0: "op de dag zelf", 1: "een dag van tevoren", 3: "drie dagen van tevoren",
               7: "een week van tevoren" },
@@ -42,7 +43,8 @@ const T = {
     category: {
       concert: "Concerts", classical: "Classical", club: "Club", theatre: "Theatre", dance: "Dance",
       comedy: "Comedy", film: "Film", festival: "Festivals", market: "Markets", exhibition: "Exhibitions",
-      family: "Family", talk: "Talks", sports: "Sport", quiz: "Quizzes", other: "Other",
+      family: "Family", talk: "Talks", sports: "Sport", quiz: "Quizzes", openmic: "Open mics",
+      other: "Other",
     },
     remind: { 0: "on the day itself", 1: "the day before", 3: "three days before", 7: "a week before" },
     offline: "No connection. Try again in a moment.",

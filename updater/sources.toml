@@ -111,6 +111,19 @@ source_priority = [
   "boomchicago",
   "stadsschouwburg_utrecht",
   "comedyhuis",
+  "dbs",
+  "helling",
+  "ekko",
+  "acu",
+  "nar",
+  "theater_kikker",
+  "podium_hoge_woerd",
+  "werftheater",
+  "kabulagogo",
+  "voorkamer",
+  "voorkamer_events",
+  "pothuys",
+  "averechts_agenda",
   "comedytrain",
   "melkweg",
   "ziggodome",
@@ -260,6 +273,11 @@ prefer_timing = "Start"
 price_min = "ticketTypes"
 default_city = "Utrecht"
 fallback_categories = ["concert"]
+# TivoliVredenburg sells tickets for nights in other rooms (venue
+# "Buitenwereld"). The dB's ones ("BLACKGOLD @ dB's", "dB's: Metal Quiz")
+# come from dB's itself now, with the support acts, and two venue-direct
+# sources never merge (see _may_merge), so Tivoli's copy is dropped.
+drop_title_contains = ["@ db's", "@ db’s", "db's: ", "db’s: "]
 
 [source.fields]
 title = "publicTitleWebsite"
@@ -918,6 +936,432 @@ adapter = "manual"
 enabled = true
 file = "data/manual/markets.json"
 
+
+# ---------------------------------------------------------------------------
+# UTRECHT PODIA — the city's smaller stages, read from their own sites. Before
+# these, UITagenda was the only way in, and it carries a few of each venue's
+# nights rather than its programme (EKKO: 2 of 37 in four weeks, 2026-11-17).
+# ---------------------------------------------------------------------------
+
+# dB's in Lombok (Cartesiusweg): punk, metal, garage and rock-'n-roll. Plain
+# The Events Calendar, so the tribe feed has every night with its clock; the
+# venue object is empty on all of them, hence the defaults. Its categories are
+# genres ("Hardcore", "Darker Wave"), and everything there is a concert unless
+# it says dance night or classical.
+[[source]]
+id = "dbs"
+label = "dB's"
+adapter = "tribe"
+enabled = true
+base_url = "https://dbstudio.nl"
+default_venue = "dB's"
+default_city = "Utrecht"
+fallback_categories = ["concert"]
+
+[source.category_map]
+concert = "concert"
+dansavond = "club"
+klassiek = "classical"
+
+# De Helling: every card on /agenda/ carries a schema.org Event block with the
+# clock, a 680x400 image, the one-line pitch and the price, so the index page
+# alone is the whole programme (64 events on 2026-11-17) with no detail fetches.
+[[source]]
+id = "helling"
+label = "De Helling"
+adapter = "jsonld"
+enabled = true
+urls = ["https://dehelling.nl/agenda/"]
+default_venue = "De Helling"
+default_city = "Utrecht"
+fallback_categories = ["concert"]
+
+# EKKO: WordPress with an `event` post type. The date is in ACF (date_time,
+# not the post date), the REST list is ordered by publication, and nothing in
+# it filters on the event date - so four pages of the newest hundred posts are
+# read and the horizon filter drops the past ones. On 2026-11-17 every upcoming
+# night (59) was within the first three pages. `lang=nl` because Polylang
+# serves each night twice, once per language. The category sits in
+# class_list ("category-club"); "radio" is Omroep EKKO, an online stream, not
+# a night out, so it is dropped by title.
+[[source]]
+id = "ekko"
+label = "EKKO"
+adapter = "json_api"
+enabled = true
+url = "https://ekko.nl/wp-json/wp/v2/event?per_page=100&lang=nl&page={page}&_embed=wp:featuredmedia&_fields=link,title.rendered,acf.date_time,acf.date_time_end,acf.one_liner,acf.price,acf.location_other,class_list,_links,_embedded"
+pages = [1, 2, 3, 4]
+stop_on_page_error = true
+list_path = ""
+default_venue = "EKKO"
+default_city = "Utrecht"
+drop_title_contains = ["omroep ekko"]
+fallback_categories = ["concert"]
+
+[source.fields]
+title = "title.rendered"
+start = "acf.date_time"
+end = "acf.date_time_end"
+url = "link"
+image = "_embedded.wp:featuredmedia[0].source_url"
+summary = "acf.one_liner"
+price = "acf.price"
+venue = "acf.location_other"
+category = "class_list"
+
+[source.category_map]
+"category-concert" = "concert"
+"category-club" = "club"
+
+# ACU on the Voorstraat: a volunteer-run political café and stage. /agenda
+# lists every night as one card whose link carries the date
+# (/events/20261117/...); the clock is "Start:" (doors, when given, come
+# first). Two cards dated 2040 and 2057 are permanent pages, which the horizon
+# drops. Bounded by the card's </a>: the details list has its own </li>s.
+[[source]]
+id = "acu"
+label = "ACU"
+adapter = "regex_cards"
+enabled = true
+url = "https://acu.nl/agenda"
+default_venue = "ACU"
+default_city = "Utrecht"
+item_pattern = '''<li class="AgendaEntry[^"]*">\s*<a href="(?P<url>https://acu\.nl/events/(?P<date>\d{8})/[^"]+)"(?=(?:(?!</a>).)*?<p class="overflowing pseudo-h2">(?P<title>[^<]+)</p>)(?:(?=(?:(?!</a>).)*?<p class="overflowing pseudo-h3">(?P<summary>[^<]+)</p>))?(?:(?=(?:(?!</a>).)*?<span>Start:</span><span class="AgendaDetail">(?P<time>\d{1,2}:\d{2})))?(?:(?=(?:(?!</a>).)*?<span>Entry:</span><span class="AgendaDetail[^"]*">(?P<price>[^<]+)))?'''
+
+# NAR (Werkspoorkwartier): restaurant, bar and club in one, and much of the
+# programme is free listening sessions. /programma/ is server-rendered, one
+# <li> per night, "19 Nov 2026" plus the clock; /agenda/ is a 404. The first
+# tag on a card is the kind of night, and "gratis entree" among the tags is
+# what the free filter needs, so it is read into price.
+[[source]]
+id = "nar"
+label = "NAR"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.nar.nl/programma/"
+default_venue = "NAR"
+default_city = "Utrecht"
+item_pattern = '''<li class="upcoming-events__event">(?=(?:(?!</li>).)*?event-item__date[^>]*>\s*(?P<date>\d{1,2} [A-Za-z]{3,9} \d{4}))(?:(?=(?:(?!</li>).)*?<time datetime="\d+">\s*(?P<time>\d{1,2}:\d{2})))?(?:(?=(?:(?!</li>).)*?event-item__meta(?:(?!</li>).)*?<span class="tag label[^"]*">\s*(?P<category>[^<]+?)\s*</span>))?(?=(?:(?!</li>).)*?event-item__title[^>]*>\s*(?P<title>[^<]+?)\s*</h3>)(?:(?=(?:(?!</li>).)*?<p class="p large-body font-medium">\s*(?P<summary>[^<]+?)\s*</p>))?(?:(?=(?:(?!</li>).)*?<a href="(?P<url>https://www\.nar\.nl/event/[^"]+)"))?(?:(?=(?:(?!</li>).)*?<span class="tag label[^"]*">\s*(?P<price>gratis entree)\s*</span>))?'''
+
+[source.category_map]
+clubnacht = "club"
+live = "concert"
+
+# ---------------------------------------------------------------------------
+# THEATER KIKKER — server-rendered; /agenda prints the whole season on one
+# page (~170 performances, five months out), so there is nothing to page.
+# Every card is rendered twice, a desktop and a mobile copy; the pattern
+# anchors on the desktop one and bounds each lookahead by the "Mobile versie"
+# comment that follows it, so a missing field cannot come from the next card.
+# Dates have no year ("wo 18 november"); parse_dt rolls them into next year.
+# Cancelled performances stay listed with a "Geannuleerd" button and tag, and
+# a moved one keeps its old date with a "Verplaatst" tag next to a card for
+# the new date (Dolorosa, 15 -> 6 April 2027); both kinds are skipped.
+# "Meerdere speeltijden" cards come out without a time. The genre
+# line can lead with "Language no problem", which is a label, not a genre, so
+# the pattern takes the genre after it. "Kikker op Locatie" shows play
+# elsewhere in town (Theater Utrecht) but are still listed under Kikker.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "theater_kikker"
+label = "Theater Kikker"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.theaterkikker.nl/agenda"
+base_url = "https://www.theaterkikker.nl"
+default_venue = "Theater Kikker"
+default_city = "Utrecht"
+fallback_categories = ["theatre"]
+item_pattern = '''<div class="event desktop[^"]*"(?=(?:(?!<!-- Mobile versie -->).)*?<h3 class="titel">\s*(?P<title>[^<]+?)\s*</h3>)(?=(?:(?!<!-- Mobile versie -->).)*?<span class="date">\s*(?P<date>[^<]+?)\s*</span>)(?!(?:(?!<!-- Mobile versie -->).)*?>\s*(?:Geannuleerd|Verplaatst)\s*<)(?:(?=(?:(?!<!-- Mobile versie -->).)*?href="(?P<url>/agenda/[^"]+)"))?(?:(?=(?:(?!<!-- Mobile versie -->).)*?<span class="time">\s*(?P<time>\d{1,2}:\d{2})))?(?:(?=(?:(?!<!-- Mobile versie -->).)*?class="bg-image-img"[^>]*?src="(?P<image>[^"]+)"))?(?:(?=(?:(?!<!-- Mobile versie -->).)*?<p class="genre">\s*(?:Language no problem,\s*)?(?P<category>[^<,]+?)\s*[,<]))?(?:(?=(?:(?!<!-- Mobile versie -->).)*?<p class="oneliner">\s*(?P<summary>[^<]+?)\s*</p>))?(?:(?=(?:(?!<!-- Mobile versie -->).)*?class="btn btn-primary">\s*(?P<price>Gratis)))?'''
+
+[source.category_map]
+theater = "theatre"
+muziektheater = "theatre"
+performance = "theatre"
+storytelling = "theatre"
+jeugd = "family"
+dans = "dance"
+installatie = "exhibition"
+"specials & festivals" = "festival"
+
+
+# ---------------------------------------------------------------------------
+# PODIUM HOGE WOERD (Leidsche Rijn) — same CMS as Theater Kikker, but /agenda
+# shows ten performances and loads the rest from /mvc/event/partial?p=N as
+# you scroll (the URL is in the page's own loadData()). Each partial is ten
+# cards, ~10 pages to five months out; a page past the end is an empty body,
+# so fifteen pages leave room to grow. Check page 2 still differs from page 1
+# if the count drops to ten.
+# Card layout: <span class="gezelschap"> is the GENRE, not the company;
+# <span class="titel"> is the performer or company and the bare <span> after
+# it the show name, which goes in the summary - there is no separator in the
+# markup to join the two into one title. Desktop and mobile copies again;
+# lookaheads stop at the mobile copy. Cancelled and moved ("Verplaatst")
+# cards are skipped as at Kikker; none were listed on 2026-11-17.
+# ---------------------------------------------------------------------------
+[[source]]
+id = "podium_hoge_woerd"
+label = "Podium Hoge Woerd"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.podiumhogewoerd.nl/mvc/event/partial?p={page}&q=&genre=&special=&StartDate=&EndDate="
+pages = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+base_url = "https://www.podiumhogewoerd.nl"
+link = "https://www.podiumhogewoerd.nl/agenda"
+default_venue = "Podium Hoge Woerd"
+default_city = "Utrecht"
+fallback_categories = ["theatre"]
+item_pattern = '''<div class="event desktop[^"]*"(?=(?:(?!class="event mobile).)*?<span class="titel">\s*(?P<title>[^<]+?)\s*</span>)(?=(?:(?!class="event mobile).)*?<span class="date">\s*(?P<date>[^<]+?)\s*</span>)(?!(?:(?!class="event mobile).)*?>\s*(?:Geannuleerd|Verplaatst)\s*<)(?:(?=(?:(?!class="event mobile).)*?href="(?P<url>/agenda/[^"]+)"))?(?:(?=(?:(?!class="event mobile).)*?<span class="time">\s*(?P<time>\d{1,2}:\d{2})))?(?:(?=(?:(?!class="event mobile).)*?class="bg-image-img"[^>]*?src="(?P<image>[^"]+)"))?(?:(?=(?:(?!class="event mobile).)*?<span class="gezelschap">\s*(?P<category>[^<,]+?)\s*[,<]))?(?:(?=(?:(?!class="event mobile).)*?<span class="titel">[^<]*</span>\s*<span>\s*(?P<summary>[^<]+?)\s*</span>))?(?:(?=(?:(?!class="event mobile).)*?class="btn btn-primary ?"[^>]*>\s*(?P<price>Gratis)))?'''
+
+[source.category_map]
+cabaret = "comedy"
+kleinkunst = "comedy"
+theater = "theatre"
+theatertour = "theatre"
+muziektheater = "theatre"
+circustheater = "theatre"
+verrassing = "theatre"
+jeugd = "family"
+talks = "talk"
+dans = "dance"
+muziek = "concert"
+film = "film"
+
+
+# ---------------------------------------------------------------------------
+# WERFTHEATER — WordPress, but the agenda is not an event post type that the
+# REST API exposes: the /programma/ bricks (theme post type js_events) carry
+# a date and no time, and fooevents/v1 wants a login. Every show is also a
+# WooCommerce product, and the public Store API lists them all (67 on
+# 2026-11-17, ten months out) with the performance in the SKU:
+# "2026-11-19 om 20:30 uur", which parse_dt reads as date plus clock (it
+# looks for a time after a leading ISO date since 2026-11-17). No default
+# time: nearly every show is 20:30, but the Sunday matinees are not (13 Dec
+# 14:30). Reading the JSON with regex_cards instead would leave \u00e9-style
+# escapes in titles (René, Gülec).
+# The first product tag is the genre. Prices are in cents in the API, so none
+# are shown. No past shows were listed on 2026-11-17 (pipeline drops any).
+# ---------------------------------------------------------------------------
+[[source]]
+id = "werftheater"
+label = "Werftheater"
+adapter = "json_api"
+enabled = true
+url = "https://www.werftheater.nl/wp-json/wc/store/v1/products?per_page=100&page={page}"
+pages = [1, 2, 3]
+stop_on_page_error = true
+list_path = ""
+base_url = "https://www.werftheater.nl"
+default_venue = "Werftheater"
+default_city = "Utrecht"
+fallback_categories = ["comedy"]
+
+[source.fields]
+title = "name"
+start = "sku"
+url = "permalink"
+image = "images[0].src"
+summary = "short_description"
+category = "tags[0].name"
+
+[source.category_map]
+cabaret = "comedy"
+"muzikaal cabaret" = "comedy"
+"verhalend en fysiek cabaret" = "comedy"
+comedian = "comedy"
+"stand-up comedy" = "comedy"
+"stand-up comedian" = "comedy"
+comedy = "comedy"
+humor = "comedy"
+anekdotes = "comedy"
+kleinkunst = "comedy"
+"muzikaal kleinkunst" = "comedy"
+muziektheater = "theatre"
+theatershow = "theatre"
+"theatrale show" = "theatre"
+muziek = "concert"
+"akoestisch project" = "concert"
+soul = "concert"
+literair = "talk"
+gedicht = "talk"
+"poëzie" = "talk"
+theatercollege = "talk"
+
+# ---------------------------------------------------------------------------
+# UTRECHT CAFÉS — live music, open stages and community nights in rooms too
+# small for any agenda. Each is read from the café's own site.
+# ---------------------------------------------------------------------------
+
+# 't Oude Pothuys on the Oudegracht: live music every night, a jam session on
+# Tuesdays and Thursdays and Eric Kerns' open mic on Sundays. A Jimdo page of
+# call-to-action buttons, one per night, "09.11 Abramusica", about two months
+# ahead. No year anywhere on the page and no clock either, so these are
+# all-day cards. day_month_dates gives "dd.mm" a year the way parse_dt does
+# for "5 jan" (one seen more than 60 days ago is next year's), so "05.01"
+# read in November is January. The buttons
+# link to the act's own Instagram, so cards link to the programme page.
+# "TBA" and "CLOSED" fill the empty nights and are skipped by the pattern.
+[[source]]
+id = "pothuys"
+label = "Het Pothuys"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.pothuys.nl/live-music-1/"
+default_venue = "Het Pothuys, Oudegracht"
+default_city = "Utrecht"
+day_month_dates = true
+# A music café: a night that names only the act is a concert. Jam sessions
+# and the open mic get openmic from their titles; "DJ:" nights come out club.
+fallback_categories = ["concert"]
+item_pattern = '''<a class="j-calltoaction-link[^"]*"[^>]*\sdata-title="(?P<date>\d{1,2}\.\d{1,2})\s+(?!(?:TBA|CLOSED)\s*")(?P<title>[^"]+)"'''
+
+# KABUL à GoGo, the club in the old Gietijzer factory: club nights, the
+# monthly Muziekbingo XXL, Teatro Danscafé. Webflow; /agenda is one
+# server-rendered page with every upcoming night (no pagination at 17 cards).
+# Each card prints "20-11 · 23:00 – 05:00" with no year, so the date comes
+# from the event slug, /events/20261120-2 (or community-night-20261127),
+# which matched the printed day on every card on 2026-11-17. The detail pages
+# carry JSON-LD too, but that is one request per event for the same fields.
+# The programme ends on 1 January 2027 ("Per 1 januari stopt het KABUL en
+# Teatro programma"): retire this source when it runs dry.
+[[source]]
+id = "kabulagogo"
+label = "KABUL à GoGo"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.kabulagogo.nl/agenda"
+base_url = "https://www.kabulagogo.nl"
+default_venue = "KABUL à GoGo"
+default_city = "Utrecht"
+# Every field is a lookahead bounded by the card's hidden month label, the
+# last thing in each card, so a card without tags cannot borrow the next one's.
+# The category is their primary tag (CLUB / SOCIAL / CULTURAL).
+item_pattern = '''<div class="days_event_wrap is-agenda">(?=(?:(?!agenda_item_month).)*?class="days_event_time[^"]*">\d{1,2}-\d{1,2}\D+?(?P<time>\d{1,2}:\d{2}))(?=(?:(?!agenda_item_month).)*?<h3>(?P<title>(?:(?!</h3>).)+)</h3>)(?=(?:(?!agenda_item_month).)*?href="(?P<url>/events/(?:[a-z0-9-]*?-)?(?P<date>20\d{6})(?:-\d+)?)")(?:(?=(?:(?!agenda_item_month).)*?class="u-rich-text w-richtext">(?P<summary>(?:(?!</div>).)*)</div>))?(?:(?=(?:(?!agenda_item_month).)*?class="tag_wrap is-secondary"><div[^>]*>(?P<category>[^<]+)</div>))?(?:(?=(?:(?!agenda_item_month).)*?>(?P<price>Free entry)</div>))?'''
+
+# SOCIAL is the Muziekbingo, which the keyword pass would otherwise call a
+# concert for the word "muziek". CULTURAL is left to the title and blurb
+# (Club Kafka is theatre).
+[source.category_map]
+club = "club"
+social = "other"
+
+# De Voorkamer on the Kanaalstraat: language cafés, workshops, dance and
+# community nights, mostly free. A Next.js front end on Payload CMS. Read
+# twice, because neither view is complete on its own:
+#
+# 1. The /agenda page, server-rendered, has one card per occurrence with the
+#    printed clock — but only for the current month (the month switcher is
+#    client-side; ?month= is ignored), so near the end of a month this sees
+#    a few days. It is the only config-level record of the recurring series
+#    (Dutch and Arabic language café, Open Hours, On The Spot jam): the API
+#    stores those as rules (weekly / nth weekday / irregular dates / skip
+#    ranges) that only their JavaScript expands.
+# 2. voorkamer_events below: the Payload REST API, for dated one-offs to the
+#    full horizon.
+#
+# Each card is in the HTML twice (carousel and grid); the dedupe drops one.
+[[source]]
+id = "voorkamer"
+label = "De Voorkamer"
+adapter = "regex_cards"
+enabled = true
+url = "https://www.devoorkamer.org/agenda"
+base_url = "https://www.devoorkamer.org"
+default_venue = "De Voorkamer"
+default_city = "Utrecht"
+# Bounded by the card's own </a>: a card is one anchor with nothing linked
+# inside it. data-day is the occurrence's local date, on every card; the
+# ?date= in the link is missing on one-offs. Image is the 640px rendition
+# from the Next image proxy.
+item_pattern = '''<a href="(?P<url>/agenda/[^"]+)"[^>]*class="[^"]*dv-event-card[^"]*"[^>]*>(?=(?:(?!</a>).)*?data-day="(?P<date>\d{4}-\d{2}-\d{2})")(?=(?:(?!</a>).)*?<h3[^>]*>(?P<title>[^<]+)</h3>)(?:(?=(?:(?!</a>).)*?<span><bdi>[^<]*?(?P<time>\d{1,2}:\d{2})))?(?:(?=(?:(?!</a>).)*?@ <bdi>(?P<venue>[^<]+)</bdi>))?(?:(?=(?:(?!</a>).)*?<p class="font-dv-mono text-sm uppercase ">(?P<category>[^<]+)</p>))?(?:(?=(?:(?!</a>).)*?</h3>\s*<p class="mt-2[^"]*">(?P<summary>[^<]+)</p>))?(?:(?=(?:(?!</a>).)*?srcSet="[^"]*?(?P<image>/_next/image\?url=[^"\s]+?&amp;w=640&amp;q=\d+)))?'''
+
+# Their own activity types. Only the ones that say what the evening is are
+# mapped; the rest ("Community hangouts", "Women's space", "Arts & crafts")
+# fall through to the keyword pass, which finds the workshop, the exhibition
+# or the jam session in the blurb.
+[source.category_map]
+"film screenings" = "film"
+"orientation & knowledge" = "talk"
+"talent development" = "talk"
+"reading & writing" = "talk"
+
+# De Voorkamer's one-off events (talks, workshops, screenings, parties), from
+# the anonymous Payload REST API behind the site: every non-recurring event,
+# newest first, so the future ones are always on the first page. `select`
+# keeps the response at ~100 KB instead of ~450 KB; depth=1 resolves the
+# image and category relations. noIndex events are left out: their own
+# agenda does not show them either (on 2026-11-17 a hidden copy of the
+# 10-year party and an afternoon programme before it). The description is
+# Lexical rich text, so the summary is its first text node. Trap: startDate
+# is what the editor entered, in UTC, and on one past event it disagreed with
+# the printed "time" field (Writing Space: 10:00 vs 14:00). Within the current
+# month the agenda page above has the printed clock, and the fuzzy pass folds
+# the two records of one evening together (identical title, same day).
+[[source]]
+id = "voorkamer_events"
+label = "De Voorkamer (losse events)"
+adapter = "json_api"
+enabled = true
+url = "https://www.devoorkamer.org/api/events?limit=50&depth=1&sort=-startDate&where[type][not_equals]=recurring&where[noIndex][not_equals]=true&select[title]=true&select[slug]=true&select[startDate]=true&select[endDate]=true&select[location]=true&select[image]=true&select[categories]=true&select[description]=true"
+list_path = "docs"
+base_url = "https://www.devoorkamer.org/agenda/"
+default_venue = "De Voorkamer"
+default_city = "Utrecht"
+
+[source.fields]
+title = "title"
+start = "startDate"
+end = "endDate"
+url = "slug"
+venue = "location"
+image = "image.url"
+summary = "description.root.children[0].children[0].text"
+category = "categories[0].name"
+
+[source.category_map]
+"film screenings" = "film"
+"orientation & knowledge" = "talk"
+"talent development" = "talk"
+"reading & writing" = "talk"
+
+# Café Averechts' own programme, beside its pub quiz (the `averechts` source
+# reads that from the quiz site, so it is dropped here): open podium every
+# Thursday, live acts on Fridays, jams on Sunday afternoons, the vegetarian
+# Eetcafé on Sunday nights. Joomla + JEvents. This reads the year list, which
+# with ?limit=0 is every event of the year on one page; they publish about a
+# year ahead. The bare URL is the current year and the following years are
+# named, so the list needs a new year before 2030 (a year already past costs
+# one request and adds nothing). The iCal export answers 403 and the RSS feed
+# stops at five items. Every JEvents view prints "Zaterdag, 31. Januari 2026
+# 20:00", which is why _NL_DATE in model.py allows a dot after the day.
+# "Live: Deze vrijdag geen programmering, maar ..." is the placeholder for a
+# Friday without an act.
+[[source]]
+id = "averechts_agenda"
+label = "Café Averechts"
+adapter = "regex_cards"
+enabled = true
+urls = [
+  "https://www.averechts.nl/agenda/evenementenperjaar?limit=0",
+  "https://www.averechts.nl/agenda/evenementenperjaar/{page}/-?limit=0",
+]
+pages = [2027, 2028, 2029, 2030]
+base_url = "https://www.averechts.nl"
+default_venue = "Café Averechts, Lijsterstraat"
+default_city = "Utrecht"
+drop_title_contains = ["quiz", "geen programm"]
+item_pattern = '''<li class='ev_td_li'[^>]*>\s*(?P<date>[^<]+?)\s*<br\s*/?>\s*<a class="ev_link_row" href="(?P<url>[^"]+)"[^>]*>\s*(?P<title>[^<]+?)\s*</a>(?:(?!</li>).)*?::&nbsp;&nbsp;(?P<category>[^<]+?)\s*</li>'''
+
+# Their JEvents categories. Nearly everything is filed under Muziek, DJ
+# nights and the poetry open podium included, so Muziek is left unmapped: the
+# keyword pass then still finds "dj" (club) and "open podium" before settling
+# on concert for the word muziek itself.
+[source.category_map]
+dans = "dance"
+kunst = "exhibition"
+eten = "other"
+algemeen = "other"
+fooienpot = "other"
 
 # ---------------------------------------------------------------------------
 # EXPERIMENTAL — enable once the pattern is tuned with `--probe`.

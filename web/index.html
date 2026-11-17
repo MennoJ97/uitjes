@@ -69,6 +69,7 @@
 <!--# set var="t_clear_day" value="Clear the chosen day" -->
 <!--# set var="t_all_cats" value="All categories" --><!--# set var="t_cats" value="Categories" -->
 <!--# set var="t_hide_filters" value="Hide filters" -->
+<!--# set var="t_free" value="Free" --><!--# set var="t_free_label" value="Only free events" -->
 <!--# else -->
 <!--# set var="self_path" value="$nl_path" --><!--# set var="twin_path" value="$en_path" --><!--# set var="root_path" value="/" -->
 <!--# set var="t_other" value="English" --><!--# set var="t_other_lang" value="en" --><!--# set var="t_other_short" value="EN" -->
@@ -88,6 +89,7 @@
 <!--# set var="t_clear_day" value="Gekozen dag wissen" -->
 <!--# set var="t_all_cats" value="Alle categorieën" --><!--# set var="t_cats" value="Categorieën" -->
 <!--# set var="t_hide_filters" value="Filters verbergen" -->
+<!--# set var="t_free" value="Gratis" --><!--# set var="t_free_label" value="Alleen gratis uitjes" -->
 <!--# endif -->
 <link rel="canonical" href="https://uitjes.mhjansen.nl<!--# echo var="self_path" -->">
 <meta property="og:url" content="https://uitjes.mhjansen.nl<!--# echo var="self_path" -->">
@@ -223,6 +225,7 @@
           <summary id="cats-summary"><!--# echo var="t_all_cats" --></summary>
           <div class="catmenu" id="cats" role="group" aria-label="<!--# echo var="t_cats" -->"></div>
         </details>
+        <div class="seg"><button type="button" id="free" aria-pressed="false" title="<!--# echo var="t_free_label" -->" hidden><!--# echo var="t_free" --></button></div>
       </div>
     </div>
     <!-- Always visible, even when the controls are collapsed: it says what is
@@ -259,6 +262,6 @@
      reads structured data from the rendered page, after app.js has emptied
      #results. -->
 <!--# include virtual="/data/pages/${uitjes_page}.ld.html" stub="none" -->
-<script src="/app.js?v=2f927d4c"></script>
+<script src="/app.js?v=67f3f4ab"></script>
 </body>
 </html>

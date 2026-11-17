@@ -12,12 +12,21 @@ from zoneinfo import ZoneInfo
 # The taxonomy the front-end filters on. Everything gets mapped into this.
 CATEGORIES = [
     "concert", "classical", "club", "theatre", "dance", "comedy", "film",
-    "festival", "market", "exhibition", "family", "talk", "sports", "quiz", "other",
+    "festival", "market", "exhibition", "family", "talk", "sports", "quiz", "openmic",
+    "other",
 ]
+
+# Nights you take part in rather than watch: an open mic, an open podium, a jam
+# session. Like a quiz, the venue's own genre never says so (Comedyhuis files
+# its open mic under comedy, a café its jam under live music), so pipeline.py
+# adds the category from the title whatever the source labelled it.
+OPENMIC_WORDS = ("open mic", "open-mic", "openmic", "open podium", "open stage",
+                 "jam session", "jamsession", "jamsessie", "jam night", "open noise")
 
 # Checked in order — first hit wins, so put the specific ones before the broad ones.
 CATEGORY_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ("quiz", ("quiz",)),
+    ("openmic", OPENMIC_WORDS),
     ("market", ("vlooienmarkt", "rommelmarkt", "kringloop", "vintage", "snuffelmarkt",
                 "boekenmarkt", "platenbeurs", "braderie", "warenmarkt", "flea market",
                 "markt", "market", "beurs", "fair")),
@@ -125,7 +134,9 @@ _MONTHS_NL = {
     "jun.": 6, "july": 7, "june": 6,
 }
 # The ordinal is for English cards: "19th of November 2026" (Brouwerij Troost).
-_NL_DATE = re.compile(r"(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s*([a-zA-Z]{3,10})\.?\s*(\d{4})?")
+# The optional dot after the day is JEvents' "Zaterdag, 31. Januari 2026"
+# (Café Averechts).
+_NL_DATE = re.compile(r"(\d{1,2})(?:st|nd|rd|th)?\.?(?:\s+of)?\s*([a-zA-Z]{3,10})\.?\s*(\d{4})?")
 # 11-09-2026 / 11.09.2026 / 11/09/2026 — day-first, the Dutch convention
 _DMY = re.compile(r"\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\b")
 _TIME = re.compile(r"\b(\d{1,2})[:.](\d{2})\b")
@@ -153,9 +164,17 @@ def parse_dt(value, *, fallback_year: int | None = None) -> tuple[str | None, bo
             pass
 
     try:
-        return date.fromisoformat(text[:10]).isoformat(), True
+        day = date.fromisoformat(text[:10])
     except ValueError:
         pass
+    else:
+        # An ISO date with prose after it: Werftheater's SKU field is
+        # "2026-11-19 om 20:30 uur", which fromisoformat refuses whole.
+        clock = _TIME.search(text, 10)
+        if clock:
+            return datetime(day.year, day.month, day.day, int(clock.group(1)),
+                            int(clock.group(2))).isoformat(timespec="minutes"), False
+        return day.isoformat(), True
 
     match = _DMY.search(text)
     if match:
@@ -280,6 +299,9 @@ class Event:
     # Extra words the page's search matches against but never displays; see
     # search_text(). Left out of the JSON when empty, which is most events.
     search: str | None = None
+    # Free to get in, read off `price` by is_free(). What the page's
+    # Gratis/Free filter shows; left out of the JSON when false.
+    free: bool = False
     # True for hand-entered recurrences whose exact dates were never confirmed
     # against the organiser — the UI badges these so they aren't read as fact.
     provisional: bool = False
@@ -298,7 +320,8 @@ class Event:
         self.summary = clean_text(self.summary, 240)
         self.venue = clean_text(self.venue, 80)
         self.city = clean_text(self.city, 60)
-        self.price = clean_text(self.price, 40)
+        self.price = tidy_price(clean_text(self.price, 40))
+        self.free = self.free or is_free(self.price)
         self.search = search_text(self.search, exclude=(self.title, self.summary, self.venue))
         if not self.categories:
             self.categories = ["other"]
@@ -312,7 +335,47 @@ class Event:
         out = asdict(self)
         if not out["search"]:
             del out["search"]
+        if not out["free"]:
+            del out["free"]
         return out
+
+
+_BARE_PRICE = re.compile(r"^(\d+)(?:[.,](\d{1,2}))?$")
+
+
+def tidy_price(price: str | None) -> str | None:
+    """A bare number from an API ("15.5", EKKO's ACF) as "€ 15,50"; 0 as gratis.
+
+    Anything with words or a currency sign in it is the venue's own phrasing
+    and stays as written.
+    """
+    match = _BARE_PRICE.match(price or "")
+    if not match:
+        return price
+    euros, cents = int(match.group(1)), int((match.group(2) or "0").ljust(2, "0"))
+    if not euros and not cents:
+        return "gratis"
+    return f"€ {euros}" if not cents else f"€ {euros},{cents:02d}"
+
+
+# "Gratis voor jaarleden" is a members' price, not a free night. A donation
+# ("vrije gift", ACU's "Donation based") is free to walk into, which is what
+# the filter is for.
+_FREE_WORDS = re.compile(r"\b(?:gratis|free|vrije? (?:entree|toegang|gift)|"
+                         r"donation|donatie|pay what you (?:want|can))\b", re.I)
+_MEMBERS_ONLY = re.compile(r"\b(?:voor|for)\s+(?:jaar)?(?:leden|members|abonnees)\b", re.I)
+_AMOUNT = re.compile(r"\d+(?:[.,]\d+)?")
+
+
+def is_free(price: str | None) -> bool:
+    """True for "gratis", "gratis entree", "Free", "vanaf € 0,-", "€ 0"."""
+    if not price:
+        return False
+    if _FREE_WORDS.search(price):
+        return not _MEMBERS_ONLY.search(price)
+    amounts = _AMOUNT.findall(price)
+    # Every number on it is zero: "vanaf € 0,-", "€ 0,00". Not "€ 0 - 15".
+    return bool(amounts) and all(float(a.replace(",", ".")) == 0 for a in amounts)
 
 
 def dedupe_key(ev: Event) -> str:

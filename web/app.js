@@ -622,10 +622,40 @@ function buildControls() {
 /* Categories: a dropdown of checkboxes, biggest first, with counts. A native
    <details>, so it opens and closes without script; the script only closes it
    on a click elsewhere or Escape, and keeps the summary saying what is on. */
+/* The category control as wide as the widest thing it can say, bold: every
+   label it may show, measured once in place. Not while the controls are
+   collapsed (nothing to measure); setCollapsed() calls it again on opening. */
+function sizeCatSummary() {
+  const pick = $("#catpick");
+  const sum = $("#cats-summary");
+  if (!pick || !sum.offsetParent || sum.dataset.sized) return;
+  const text = sum.textContent;
+  const wasOn = pick.classList.contains("on");
+  pick.classList.add("on");
+  let width = 0;
+  [T.allCats, T.nCats(Object.keys(CATEGORY).length), ...Object.keys(CATEGORY).map(catPlural)]
+    .forEach((label) => { sum.textContent = label; width = Math.max(width, sum.getBoundingClientRect().width); });
+  pick.classList.toggle("on", wasOn);
+  sum.textContent = text;
+  sum.style.minWidth = Math.ceil(width) + "px";
+  sum.dataset.sized = "1";
+}
+
+/* Reserve each option's bold width (see .seg button::after in style.css). */
+function reserveLabelWidths() {
+  document.querySelectorAll(".seg button").forEach((b) => { b.dataset.label = b.textContent.trim(); });
+  const toggle = $("#filters-toggle");
+  if (toggle) {
+    toggle.dataset.label = [T.showFilters, T.hideFilters].sort((a, b) => b.length - a.length)[0];
+  }
+}
+
 function buildCategoryMenu() {
   const pick = $("#catpick");
   const menu = $("#cats");
   const counts = DATA.counts.by_category || {};
+
+  sizeCatSummary();
 
   const summarise = () => {
     const n = state.cats.size;
@@ -743,6 +773,7 @@ function setCollapsed(on, remember) {
   $("#filters").classList.toggle("collapsed", on);
   $("#filters-toggle").setAttribute("aria-expanded", String(!on));
   $("#filters-toggle").textContent = on ? T.showFilters : T.hideFilters;
+  if (!on) sizeCatSummary();  // could not be measured while the controls were hidden
   if (remember) {
     try { localStorage.setItem(COLLAPSE_KEY, on ? "1" : "0"); } catch (e) { /* private mode */ }
   }
@@ -806,6 +837,7 @@ fetch((PAGE_PATHS.has(location.pathname) ? "/" : "") + "data/events.json", { cac
     // Before buildControls, which paints the controls from state.
     readUrlState();
     buildControls();
+    reserveLabelWidths();
     initCollapse();
     trackBarHeight();
     buildSourcePanel();

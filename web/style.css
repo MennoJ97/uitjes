@@ -91,19 +91,33 @@ button.link.warn, button.link.warn:hover { color: var(--warn); }
   color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; }
 .seg button:hover { color: var(--ink); }
 .seg button.on { color: var(--ink); font-weight: 700; border-bottom-color: var(--accent); }
+/* Choosing an option makes it bold, and bold is wider: without this every
+   control after it moved a few pixels. Each button carries an invisible bold
+   copy of its own label (data-label, set by app.js) that holds the width. The
+   collapse toggle does the same with the longer of its two labels. */
+.seg button, .bar-head .toggle { display: inline-flex; flex-direction: column; align-items: center; }
+.bar-head .toggle { align-items: flex-start; }
+.seg button::after, .bar-head .toggle::after { content: attr(data-label); height: 0; overflow: hidden;
+  visibility: hidden; pointer-events: none; }
+.seg button::after { font-weight: 700; }
 
 .onday { display: flex; align-items: center; gap: .4rem; font-size: .875rem; }
 .onday label { color: var(--muted); }
 .onday input[type="date"] { font: inherit; color: var(--ink); padding: .25rem .45rem;
   border: 1px solid var(--line); border-radius: 2px; background: var(--surface); }
-.onday input[type="date"].on { border-color: var(--accent); font-weight: 700; }
+.onday input[type="date"].on { border-color: var(--accent); }
 .onday button { font: inherit; font-size: 1.1rem; line-height: 1; padding: 0 .2rem; cursor: pointer;
   background: none; border: 0; color: var(--muted); }
 .onday button:hover { color: var(--ink); }
+/* The clear button keeps its place while hidden, or the category control
+   after it jumps sideways the moment a day is picked. */
+.onday button[hidden] { display: inline-block; visibility: hidden; }
 
 /* Categories: one dropdown instead of fourteen pills. */
 .catpick { position: relative; }
-.catpick summary { list-style: none; cursor: pointer; font-size: .875rem; white-space: nowrap;
+/* min-width is set by app.js (sizeCatSummary) to the widest label it can show,
+   so "Alle categorieën" -> "Club" -> "3 categorieën" does not move the rest. */
+.catpick summary { list-style: none; cursor: pointer; font-size: .875rem; white-space: nowrap; box-sizing: border-box;
   padding: .3rem .6rem; border: 1px solid var(--line); border-radius: 2px; background: var(--surface); }
 .catpick summary::-webkit-details-marker { display: none; }
 .catpick summary::after { content: " \25BE"; color: var(--muted); }
